@@ -97,7 +97,7 @@ export interface DirectorActions {
   toggleViewportPanelsCollapsed: () => void;
   setViewportPanelsCollapsed: (collapsed: boolean) => void;
   selectObject: (id: string | null) => void;
-  focusObject: (id: string) => void;
+  selectObjectInKind: (id: string) => void;
   selectCrowd: (crowdId: string | null) => void;
   toggleObjectSelection: (id: string) => void;
   openSceneInspector: () => void;
@@ -538,19 +538,26 @@ function sanitizeRestoredState(state: DirectorState): DirectorState {
       ? state.selectedObjectId
       : selectedObjectIds[selectedObjectIds.length - 1] ?? null;
 
-  // Camera view must highlight its camera, without stealing the primary selection from a
-  // role/model the user had picked.
-  if (state.viewMode === "camera") {
-    const cameraObject = project.objects.find(
-      (item) => item.kind === "camera" && item.linkedCameraId === project.activeCameraId
-    );
-    const hasCameraSelection = selectedObjectIds.some(
-      (id) => project.objects.find((item) => item.id === id)?.kind === "camera"
-    );
+  // Keep the invariant after restore: at most one camera, and camera view always has one.
+  const isCameraId = (id: string) => project.objects.find((item) => item.id === id)?.kind === "camera";
+  const selectedCameraIds = selectedObjectIds.filter(isCameraId);
+  const activeCameraObject = project.objects.find(
+    (item) => item.kind === "camera" && item.linkedCameraId === project.activeCameraId
+  );
 
-    if (cameraObject && !hasCameraSelection) {
-      selectedObjectIds = [...selectedObjectIds, cameraObject.id];
-      selectedObjectId = selectedObjectId ?? cameraObject.id;
+  if (selectedCameraIds.length > 1 || (state.viewMode === "camera" && selectedCameraIds.length === 0)) {
+    const keepCameraId = activeCameraObject?.id ?? selectedCameraIds[0];
+
+    selectedObjectIds = selectedObjectIds.filter((id) => !isCameraId(id));
+
+    if (keepCameraId) {
+      selectedObjectIds = [...selectedObjectIds, keepCameraId];
+
+      if (!selectedObjectId || isCameraId(selectedObjectId) === false) {
+        selectedObjectId = selectedObjectId ?? keepCameraId;
+      } else if (selectedObjectId !== keepCameraId && !selectedObjectIds.includes(selectedObjectId)) {
+        selectedObjectId = keepCameraId;
+      }
     }
   }
 
@@ -1009,6 +1016,40 @@ function getOrderedSelectedObjectIds(state: DirectorState) {
   return state.selectedObjectId ? [state.selectedObjectId] : [];
 }
 
+/**
+ * Single source of truth for object selection:
+ * - picking a camera replaces the previously selected camera (only one camera at a time)
+ * - cameras and roles/models coexist, so the tree can highlight both kinds
+ * - picking a role/model replaces the previously selected role/model but keeps the camera
+ */
+function withObjectSelection(state: DirectorRuntimeState, id: string): DirectorRuntimeState {
+  const target = state.project.objects.find((item) => item.id === id);
+  if (!target) return state;
+
+  const isCamera = target.kind === "camera";
+  const keptIds = getOrderedSelectedObjectIds(state).filter((currentId) => {
+    if (currentId === id) return false;
+
+    const current = state.project.objects.find((item) => item.id === currentId);
+    if (!current) return false;
+
+    return isCamera ? current.kind !== "camera" : current.kind === "camera";
+  });
+
+  return {
+    ...state,
+    selectedObjectId: id,
+    selectedObjectIds: [...keptIds, id],
+    selectedCrowdId: null,
+    directorInspectorMode: "auto",
+    project: {
+      ...state.project,
+      activeCameraId:
+        isCamera && target.linkedCameraId ? target.linkedCameraId : state.project.activeCameraId,
+    },
+  };
+}
+
 function createObjectIdForDuplicate(existingObjects: DirectorObject[], source: DirectorObject) {
   if (source.kind === "camera") {
     return getNextSequentialId(
@@ -1379,15 +1420,9 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
           };
         }
 
-        const selectedObjectIds = getOrderedSelectedObjectIds(state);
-
         return {
-          ...state,
+          ...withObjectSelection(state, cameraObject.id),
           viewMode: mode,
-          selectedObjectId: cameraObject.id,
-          selectedObjectIds: selectedObjectIds.includes(cameraObject.id)
-            ? selectedObjectIds
-            : [...selectedObjectIds, cameraObject.id],
           project: { ...state.project, activeCameraId },
         };
       }),
@@ -1410,28 +1445,7 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
           },
         };
       }),
-    focusObject: (id) =>
-      commitUiMutation((state) => {
-        const selectedObject = state.project.objects.find((item) => item.id === id);
-        if (!selectedObject) return state;
-
-        const selectedObjectIds = getOrderedSelectedObjectIds(state);
-        const nextSelectedObjectIds = selectedObjectIds.includes(id) ? selectedObjectIds : [...selectedObjectIds, id];
-
-        return {
-          ...state,
-          selectedObjectId: id,
-          selectedObjectIds: nextSelectedObjectIds,
-          directorInspectorMode: "auto",
-          project: {
-            ...state.project,
-            activeCameraId:
-              selectedObject.kind === "camera" && selectedObject.linkedCameraId
-                ? selectedObject.linkedCameraId
-                : state.project.activeCameraId,
-          },
-        };
-      }),
+    selectObjectInKind: (id) => commitUiMutation((state) => withObjectSelection(state, id)),
     selectCrowd: (crowdId) =>
       commitUiMutation((state) => {
         if (!crowdId) {
@@ -1458,6 +1472,9 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
       commitUiMutation((state) => {
         const selectedObject = state.project.objects.find((item) => item.id === id);
         if (!selectedObject) return state;
+
+        // Shift-clicking a camera still keeps the "one camera" invariant.
+        if (selectedObject.kind === "camera") return withObjectSelection(state, id);
 
         const selectedObjectIds = getOrderedSelectedObjectIds(state);
         const nextSelectedObjectIds = selectedObjectIds.includes(id)
@@ -2186,20 +2203,23 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
       })),
     setActiveCamera: (cameraId) =>
       commitUiMutation((state) => {
-        const selectedObjectId =
-          state.project.objects.find((item) => item.kind === "camera" && item.linkedCameraId === cameraId)?.id ??
-          null;
+        const cameraObject = state.project.objects.find(
+          (item) => item.kind === "camera" && item.linkedCameraId === cameraId
+        );
+        const base = cameraObject
+          ? withObjectSelection(state, cameraObject.id)
+          : {
+              ...state,
+              selectedObjectId: null,
+              selectedObjectIds: getOrderedSelectedObjectIds(state).filter(
+                (id) => state.project.objects.find((item) => item.id === id)?.kind !== "camera"
+              ),
+              directorInspectorMode: "auto" as const,
+            };
 
         return {
-          ...state,
-          project: {
-            ...state.project,
-            activeCameraId: cameraId,
-          },
-          selectedObjectId,
-          selectedObjectIds: selectedObjectId ? [selectedObjectId] : [],
-          selectedCrowdId: null,
-          directorInspectorMode: "auto",
+          ...base,
+          project: { ...base.project, activeCameraId: cameraId },
         };
       }),
     addCameraCaptures: (cameraId, dataUrls) =>

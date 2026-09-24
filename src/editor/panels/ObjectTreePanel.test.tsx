@@ -59,6 +59,23 @@ it("keeps the camera and role selections independent", async () => {
   expect(state.project.activeCameraId).toBe("cam_1");
 });
 
+it("never highlights two cameras at once", async () => {
+  const user = userEvent.setup();
+  useDirectorStore.getState().addCameraShot();
+
+  render(<ObjectTreePanel />);
+
+  await user.click(screen.getByRole("treeitem", { name: "角色01" }));
+  await user.click(screen.getByRole("treeitem", { name: "机位01" }));
+  await user.click(screen.getByRole("treeitem", { name: "机位02" }));
+
+  const state = useDirectorStore.getState();
+
+  expect(state.selectedObjectId).toBe("cam_object_2");
+  expect(state.selectedObjectIds.filter((id) => id.startsWith("cam_object_"))).toEqual(["cam_object_2"]);
+  expect(state.selectedObjectIds).toContain("char_default_a");
+});
+
 it("removes the object from its row delete button", async () => {
   const user = userEvent.setup();
   render(<ObjectTreePanel />);

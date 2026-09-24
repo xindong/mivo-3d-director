@@ -162,6 +162,27 @@ it("selects the active camera object when switching to the camera view", () => {
   expect(restored.selectedObjectId).toBe("cam_object_1");
 });
 
+it("keeps at most one camera selected while switching shots and views", () => {
+  useDirectorStore.getState().addCameraShot();
+  const secondCameraObjectId = useDirectorStore.getState().selectedObjectId as string;
+
+  expect(secondCameraObjectId).not.toBe("cam_object_1");
+
+  useDirectorStore.getState().selectObject("char_default_a");
+  useDirectorStore.getState().setActiveCamera("cam_1");
+
+  let state = useDirectorStore.getState();
+
+  expect(state.selectedObjectIds).toEqual(["char_default_a", "cam_object_1"]);
+
+  useDirectorStore.getState().selectObjectInKind(secondCameraObjectId);
+
+  state = useDirectorStore.getState();
+
+  expect(state.selectedObjectIds).toEqual(["char_default_a", secondCameraObjectId]);
+  expect(state.selectedObjectIds.filter((id) => id.startsWith("cam_object_"))).toHaveLength(1);
+});
+
 it("clears every selection when switching back to the director view", () => {
   useDirectorStore.getState().selectObject("char_default_a");
   useDirectorStore.getState().setViewMode("camera");
@@ -243,7 +264,7 @@ it("highlights the active camera when a restored scene is already in camera view
 
 it("keeps camera and object selections independent and persists both", () => {
   useDirectorStore.getState().selectObject("char_default_a");
-  useDirectorStore.getState().focusObject("cam_object_1");
+  useDirectorStore.getState().selectObjectInKind("cam_object_1");
 
   const state = useDirectorStore.getState();
 
