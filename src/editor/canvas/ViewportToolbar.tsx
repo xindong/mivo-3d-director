@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -21,15 +22,15 @@ import {
   Plus,
   Ratio,
   Rotate3D,
+  RotateCcw,
   Scale3D,
-  Trash2,
   UserPlus,
   Video,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { requestViewportCapture } from "../io/captureBridge";
-import { readLocalModelFile } from "../loaders/localModelImport";
+import { LOCAL_MODEL_ACCEPT, readLocalModelFile } from "../loaders/localModelImport";
 import { readPanoramaFile } from "../loaders/panoramaImport";
 import {
   getModelLibraryItems,
@@ -50,9 +51,12 @@ import {
   type TransformMode,
 } from "../store/directorStore";
 
+type ToolbarActionGroup = "transform" | "add" | "capture" | "view";
+
 type ToolbarAction = {
   label: string;
   icon: LucideIcon;
+  group: ToolbarActionGroup;
   mode?: TransformMode;
   onClick: () => void;
 };
@@ -121,7 +125,6 @@ export function ViewportToolbar({
     useState<ModelLibraryCategoryId>("convenience");
   const addImportedAsset = useDirectorStore((state) => state.addImportedAsset);
   const addObjectFromAsset = useDirectorStore((state) => state.addObjectFromAsset);
-  const removeImportedAsset = useDirectorStore((state) => state.removeImportedAsset);
   const assets = useDirectorStore((state) => state.project.assets);
   const addPresetCharacter = useDirectorStore((state) => state.addPresetCharacter);
   const addCrowdCharacters = useDirectorStore((state) => state.addCrowdCharacters);
@@ -136,6 +139,9 @@ export function ViewportToolbar({
   const setTransformMode = useDirectorStore((state) => state.setTransformMode);
   const setViewportAspectRatio = useDirectorStore((state) => state.setViewportAspectRatio);
   const toggleViewportPanelsCollapsed = useDirectorStore((state) => state.toggleViewportPanelsCollapsed);
+  const resetDirectorScene = useDirectorStore((state) => state.resetDirectorScene);
+  const setActiveCamera = useDirectorStore((state) => state.setActiveCamera);
+  const setCameraInspectorTab = useDirectorStore((state) => state.setCameraInspectorTab);
 
   useEffect(() => {
     if (!characterMenuOpen && !crowdPanelOpen && !modelLibraryOpen && !aspectRatioPanelOpen) return;
@@ -320,6 +326,11 @@ export function ViewportToolbar({
         cameraId: targetCameraId,
       });
       addCameraCaptures(targetCameraId, results.map((result) => result.dataUrl));
+
+      if (preset === "current") {
+        setActiveCamera(targetCameraId);
+        setCameraInspectorTab("captures");
+      }
     } catch {
       // Keep the capsule toolbar icon-only and free of transient status text.
     }
@@ -440,24 +451,25 @@ export function ViewportToolbar({
   }
 
   const actions: ToolbarAction[] = [
-    { label: "移动", icon: Move3D, mode: "translate", onClick: () => selectTransformMode("translate") },
-    { label: "旋转", icon: Rotate3D, mode: "rotate", onClick: () => selectTransformMode("rotate") },
-    { label: "缩放", icon: Scale3D, mode: "scale", onClick: () => selectTransformMode("scale") },
-    { label: "导入全景图", icon: ImagePlus, onClick: () => panoramaInputRef.current?.click() },
+    { group: "transform", label: "移动", icon: Move3D, mode: "translate", onClick: () => selectTransformMode("translate") },
+    { group: "transform", label: "旋转", icon: Rotate3D, mode: "rotate", onClick: () => selectTransformMode("rotate") },
+    { group: "transform", label: "缩放", icon: Scale3D, mode: "scale", onClick: () => selectTransformMode("scale") },
+    { group: "add", label: "添加角色", icon: UserPlus, onClick: toggleCharacterMenu },
     {
+      group: "add",
       label: "导入本地模型",
       icon: Box,
       onClick: () => {
         sceneLocalModelInputRef.current?.click();
       },
     },
-    { label: "模型库", icon: Boxes, onClick: toggleModelLibrary },
-    { label: "添加机位", icon: Video, onClick: addCameraFromViewport },
-    { label: "选择画幅比例", icon: Ratio, onClick: toggleAspectRatioPanel },
-    { label: "当前视角截图", icon: Camera, onClick: () => void handleCapture("current") },
-    { label: "四方位截图", icon: Grid2X2, onClick: () => void handleCapture("four") },
-    { label: "十二方位截图", icon: Grid3X3, onClick: () => void handleCapture("twelve") },
-    { label: "全屏", icon: Expand, onClick: toggleViewportPanelsCollapsed },
+    { group: "add", label: "添加机位", icon: Video, onClick: addCameraFromViewport },
+    { group: "capture", label: "选择画幅比例", icon: Ratio, onClick: toggleAspectRatioPanel },
+    { group: "capture", label: "当前视角截图", icon: Camera, onClick: () => void handleCapture("current") },
+    { group: "capture", label: "四方位截图", icon: Grid2X2, onClick: () => void handleCapture("four") },
+    { group: "capture", label: "十二方位截图", icon: Grid3X3, onClick: () => void handleCapture("twelve") },
+    { group: "view", label: "重置", icon: RotateCcw, onClick: resetDirectorScene },
+    { group: "view", label: "全屏", icon: Expand, onClick: toggleViewportPanelsCollapsed },
   ];
 
   function renderActionButton(action: ToolbarAction) {
@@ -468,8 +480,10 @@ export function ViewportToolbar({
       <button
         key={action.label}
         aria-label={action.label}
+        aria-expanded={action.label === "添加角色" ? characterMenuOpen : undefined}
         aria-pressed={action.mode ? active : undefined}
         className={`ui-icon-button viewport-toolbar-button${active ? " is-active" : ""}`}
+        ref={action.label === "添加角色" ? characterTriggerRef : undefined}
         type="button"
         onClick={action.onClick}
       >
@@ -477,6 +491,20 @@ export function ViewportToolbar({
         <span className="viewport-toolbar-label">{action.label}</span>
       </button>
     );
+  }
+
+  function renderToolbarActions() {
+    return actions.map((action, index) => {
+      const previous = actions[index - 1];
+      const divider = previous && previous.group !== action.group;
+
+      return (
+        <Fragment key={`${action.group}-${action.label}`}>
+          {divider ? <span className="viewport-toolbar-divider" aria-hidden="true" /> : null}
+          {renderActionButton(action)}
+        </Fragment>
+      );
+    });
   }
 
   const modelLibraryItems = getModelLibraryItems();
@@ -501,41 +529,7 @@ export function ViewportToolbar({
   return (
     <>
       <div className="viewport-toolbar" role="group" aria-label="3D视口快捷工具" ref={setToolbarElement}>
-        {actions.slice(0, 3).map(renderActionButton)}
-        <div className="viewport-toolbar-menu-wrap">
-          <button
-            aria-expanded={characterMenuOpen}
-            aria-label="添加角色"
-            className="ui-icon-button viewport-toolbar-button"
-            ref={characterTriggerRef}
-            type="button"
-            onClick={toggleCharacterMenu}
-          >
-            <UserPlus aria-hidden="true" size={17} strokeWidth={1.9} />
-            <span className="viewport-toolbar-label">添加角色</span>
-          </button>
-        </div>
-        {actions.slice(3).map((action) => {
-          if (action.label !== "模型库") {
-            return renderActionButton(action);
-          }
-
-          const Icon = action.icon;
-
-          return (
-            <button
-              key={action.label}
-              aria-label={action.label}
-              className="ui-icon-button viewport-toolbar-button"
-              ref={modelLibraryTriggerRef}
-              type="button"
-              onClick={action.onClick}
-            >
-              <Icon aria-hidden="true" size={17} strokeWidth={1.9} />
-              <span className="viewport-toolbar-label">{action.label}</span>
-            </button>
-          );
-        })}
+        {renderToolbarActions()}
       </div>
       {characterMenuOpen ? (
         <div
@@ -770,16 +764,6 @@ export function ViewportToolbar({
                       </span>
                       <span className="model-library-name">{item.name}</span>
                     </button>
-                    <button
-                      aria-label={`删除模型 ${item.name}`}
-                      className="model-library-card-delete"
-                      type="button"
-                      onClick={() => {
-                        removeImportedAsset(item.id);
-                      }}
-                    >
-                      <Trash2 aria-hidden="true" size={14} strokeWidth={1.9} />
-                    </button>
                   </div>
                 ) : (
                   <button
@@ -870,7 +854,7 @@ export function ViewportToolbar({
         className="hidden-file-input"
         data-testid="scene-local-model-input"
         tabIndex={-1}
-        accept=".fbx,.obj"
+        accept={LOCAL_MODEL_ACCEPT}
         type="file"
         onChange={(event) => void handleLocalModelChange(event, true)}
       />
@@ -880,7 +864,7 @@ export function ViewportToolbar({
         className="hidden-file-input"
         data-testid="library-local-model-input"
         tabIndex={-1}
-        accept=".fbx,.obj"
+        accept={LOCAL_MODEL_ACCEPT}
         multiple
         type="file"
         onChange={(event) => void handleLocalModelChange(event, false)}

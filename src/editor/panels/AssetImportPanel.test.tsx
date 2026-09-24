@@ -51,7 +51,7 @@ it("imports a local OBJ/FBX model from the single local model entry", async () =
   expect(screen.queryByText("导入道具模型")).not.toBeInTheDocument();
 
   const input = screen.getByLabelText("导入本地模型");
-  expect(input).toHaveAttribute("accept", ".fbx,.obj");
+  expect(input).toHaveAttribute("accept", ".glb,.gltf,.obj,.fbx,.stl,.ply,.dae,.3mf,.3ds,.zip");
 
   const file = new File(["demo"], "football.obj", { type: "model/obj" });
   await user.upload(input, file);
@@ -65,7 +65,7 @@ it("imports a local OBJ/FBX model from the single local model entry", async () =
   const latestAsset =
     useDirectorStore.getState().project.assets[useDirectorStore.getState().project.assets.length - 1];
   expect(latestAsset?.fileName).toBe("football.obj");
-  expect(screen.getByText("已导入本地模型: football.obj")).toBeInTheDocument();
+  expect(input.parentElement?.querySelector(".asset-import-status")).toHaveTextContent("已导入本地模型: football.obj");
 });
 
 it("imports a panorama image and shows the connected panorama file", async () => {

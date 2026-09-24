@@ -53,15 +53,15 @@ it("uses the provided right inspector layout for role properties", () => {
   const { container } = render(<CharacterPanel />);
 
   expect(screen.getByLabelText("角色右侧属性面板")).toHaveClass("right-inspector", "character-inspector");
-  expect(container.querySelector(".right-inspector-header")).toBeInTheDocument();
+  expect(container.querySelector(".right-inspector-header")).not.toBeInTheDocument();
   expect(container.querySelector(".right-inspector-tabs")).toBeInTheDocument();
   expect(container.querySelector(".right-inspector-content")).toBeInTheDocument();
 
-  const positionX = screen.getByLabelText("角色位置 X").closest(".inspector-axis-input");
+  const positionX = screen.getByLabelText("角色位置 X").closest(".inspector-range-field");
   const colorRow = screen.getByLabelText("角色颜色 HEX").closest(".inspector-color-row");
 
   expect(positionX).toBeInTheDocument();
-  expect(within(positionX as HTMLElement).getByText("X")).toHaveClass("inspector-axis-prefix");
+  expect(within(positionX as HTMLElement).getByText("X")).toHaveClass("inspector-range-axis");
   expect(colorRow).toBeInTheDocument();
   expect(screen.getByLabelText("角色颜色")).toHaveClass("inspector-color-swatch");
 });
@@ -76,14 +76,43 @@ it("marks the pose adjustment section for the compact character inspector layout
   expect(screen.getByText("姿势调节").closest(".inspector-section")).toHaveClass("pose-adjust-section");
 });
 
-it("adjusts axis values by dragging the gray XYZ prefix handles", () => {
+it("nudges axis values from the number input stepper", async () => {
+  const user = userEvent.setup();
   render(<CharacterPanel />);
 
-  const dragHandle = screen.getByRole("button", { name: "角色位置 X 拖动调整" });
+  await user.click(screen.getByLabelText("角色位置 Y 增加"));
+  await user.click(screen.getByLabelText("角色位置 Y 增加"));
 
-  fireEvent.mouseDown(dragHandle, { button: 0, clientX: 100 });
-  fireEvent.mouseMove(window, { clientX: 120 });
-  fireEvent.mouseUp(window);
+  const role = useDirectorStore.getState().project.objects.find((item) => item.id === "char_default_a");
+
+  expect(role?.transform.position[1]).toBeCloseTo(0.2);
+
+  await user.click(screen.getByLabelText("角色位置 Y 减少"));
+
+  expect(
+    useDirectorStore.getState().project.objects.find((item) => item.id === "char_default_a")?.transform.position[1]
+  ).toBeCloseTo(0.1);
+});
+
+it("accepts a leading minus sign while typing axis values", async () => {
+  const user = userEvent.setup();
+  render(<CharacterPanel />);
+
+  const input = screen.getByLabelText("角色位置 X");
+
+  await user.clear(input);
+  await user.type(input, "-2.5");
+
+  const role = useDirectorStore.getState().project.objects.find((item) => item.id === "char_default_a");
+
+  expect(role?.transform.position[0]).toBe(-2.5);
+  expect(input).toHaveValue(-2.5);
+});
+
+it("adjusts role position through the per-axis slider rows", () => {
+  render(<CharacterPanel />);
+
+  fireEvent.change(screen.getByLabelText("角色位置 X 滑杆"), { target: { value: "2" } });
 
   const role = useDirectorStore.getState().project.objects.find((item) => item.id === "char_default_a");
   expect(role?.transform.position[0]).toBe(2);

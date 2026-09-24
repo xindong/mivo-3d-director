@@ -45,7 +45,7 @@ beforeEach(() => {
 it("renders the prop inspector fields for imported models", () => {
   render(<PropPanel />);
 
-  expect(screen.getByText("模型")).toBeInTheDocument();
+  expect(screen.getByLabelText("模型右侧属性面板")).toBeInTheDocument();
   expect(screen.getByLabelText("模型名称")).toBeInTheDocument();
   expect(screen.getByLabelText("模型位置 X")).toBeInTheDocument();
   expect(screen.getByLabelText("模型旋转 X")).toBeInTheDocument();

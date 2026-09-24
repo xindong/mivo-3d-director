@@ -7,13 +7,15 @@ beforeEach(() => {
   useDirectorStore.setState({
     ...useDirectorStore.getState(),
     ...createInitialDirectorState(),
+    cameraInspectorTab: "properties",
   });
 });
 
 it("shows the scene panel in director mode when nothing is selected", () => {
   render(<RightPanel />);
 
-  expect(screen.getByText("3D场景")).toBeInTheDocument();
+  expect(screen.getByLabelText("3D场景右侧属性面板")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "场景" })).toHaveAttribute("aria-pressed", "true");
 });
 
 it("shows the role panel when a role is selected", () => {
@@ -24,7 +26,7 @@ it("shows the role panel when a role is selected", () => {
 
   render(<RightPanel />);
 
-  expect(screen.getByText("角色")).toBeInTheDocument();
+  expect(screen.getByLabelText("角色右侧属性面板")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "属性" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "姿势" })).toBeInTheDocument();
 });
@@ -35,7 +37,7 @@ it("shows the role panel when a crowd group is selected", () => {
 
   render(<RightPanel />);
 
-  expect(screen.getByText("角色")).toBeInTheDocument();
+  expect(screen.getByLabelText("角色右侧属性面板")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "属性" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "姿势" })).toBeInTheDocument();
 });
@@ -48,7 +50,7 @@ it("shows the camera panel when a camera object is selected", () => {
 
   render(<RightPanel />);
 
-  expect(screen.getByText("摄像机")).toBeInTheDocument();
+  expect(screen.getByLabelText("摄像机右侧属性面板")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "摄像机截图" })).toBeInTheDocument();
 });
 
@@ -90,7 +92,7 @@ it("shows the prop panel when an imported model is selected", () => {
 
   render(<RightPanel />);
 
-  expect(screen.getByText("模型")).toBeInTheDocument();
+  expect(screen.getByLabelText("模型右侧属性面板")).toBeInTheDocument();
   expect(screen.getByLabelText("模型名称")).toBeInTheDocument();
 });
 
@@ -103,5 +105,5 @@ it("falls back to the active camera panel in camera mode when nothing is selecte
 
   render(<RightPanel />);
 
-  expect(screen.getByText("摄像机")).toBeInTheDocument();
+  expect(screen.getByLabelText("摄像机右侧属性面板")).toBeInTheDocument();
 });

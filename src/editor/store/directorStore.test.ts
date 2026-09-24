@@ -89,6 +89,78 @@ it("toggles the viewport side panel collapse flag in ui state", () => {
   expect((useDirectorStore.getState() as CollapseUiState).viewportPanelsCollapsed ?? false).toBe(true);
 });
 
+it("repairs a corrupted persisted scene instead of restoring an unusable one", () => {
+  localStorage.setItem(
+    "storyai-3d-director-desk-demo",
+    JSON.stringify({
+      viewMode: "director",
+      selectedObjectId: "missing_object",
+      selectedObjectIds: ["missing_object"],
+      selectedCrowdId: "missing_crowd",
+      project: {
+        version: 1,
+        scene: { backgroundColor: "#000000", scale: Number.NaN, position: ["x", 0, 0] },
+        assets: [{ id: "asset_blob", kind: "prop", sourceType: "model", fileName: "a.glb", url: "blob:stale" }],
+        objects: [
+          {
+            id: "obj_1",
+            name: "受损对象",
+            kind: "prop",
+            visible: true,
+            locked: false,
+            transform: { position: [Number.NaN, 0, 0], rotation: [0, 0, 0], scale: [0, 0, 0] },
+          },
+          { name: "缺少 id", kind: "prop" },
+        ],
+        cameras: [
+          {
+            id: "cam_9",
+            name: "机位09",
+            fov: Number.NaN,
+            transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+            target: [0, 0, 0],
+          },
+        ],
+        activeCameraId: "cam_missing",
+        panoramaAssetId: "asset_missing",
+      },
+    })
+  );
+
+  const restored = createInitialDirectorState({ includePersistedScene: true });
+
+  expect(restored.selectedObjectId).toBeNull();
+  expect(restored.selectedObjectIds).toEqual([]);
+  expect(restored.selectedCrowdId).toBeNull();
+  expect(restored.project.assets).toHaveLength(0);
+  expect(restored.project.objects.map((item) => item.id)).toEqual(["obj_1"]);
+  expect(restored.project.objects[0]?.transform.position).toEqual([0, 0, 0]);
+  expect(restored.project.objects[0]?.transform.scale).toEqual([1, 1, 1]);
+  expect(restored.project.activeCameraId).toBe("cam_9");
+  expect(restored.project.cameras[0]?.fov).toBe(50);
+  expect(restored.project.panoramaAssetId).toBeNull();
+  expect(restored.project.scene.scale).toBe(1);
+  expect(restored.project.scene.position).toEqual([0, 0, 0]);
+});
+
+it("resets the scene back to the initial demo state", () => {
+  useDirectorStore.getState().addPresetCharacter();
+  useDirectorStore.getState().saveLatestSnapshot();
+
+  expect(useDirectorStore.getState().project.objects.length).toBeGreaterThan(2);
+
+  useDirectorStore.getState().resetDirectorScene();
+
+  const state = useDirectorStore.getState();
+
+  expect(state.project.objects).toHaveLength(2);
+  expect(state.project.cameras).toHaveLength(1);
+  expect(state.selectedObjectId).toBeNull();
+  expect(state.selectedObjectIds).toEqual([]);
+  expect(state.undoStack).toHaveLength(0);
+  expect(localStorage.getItem("storyai-3d-director-desk-demo")).toBeTruthy();
+});
+
 it("routes the right panel by object type and view mode", () => {
   const state = createInitialDirectorState();
   const characterId = state.project.objects.find((item) => item.kind === "character")!.id;
@@ -132,6 +204,24 @@ it("routes the right panel by object type and view mode", () => {
   expect(selectRightPanelKind({ ...state, selectedObjectId: cameraObjectId })).toBe("camera");
   expect(selectRightPanelKind(propState)).toBe("prop");
   expect(selectRightPanelKind({ ...state, viewMode: "camera", selectedObjectId: null })).toBe("camera");
+});
+
+it("opens the camera panel when a camera is picked while the scene inspector is active", () => {
+  useDirectorStore.setState(createInitialDirectorState());
+
+  const cameraObject = useDirectorStore.getState().project.objects.find((item) => item.kind === "camera")!;
+
+  useDirectorStore.getState().openSceneInspector();
+
+  expect(selectRightPanelKind(useDirectorStore.getState())).toBe("scene");
+
+  useDirectorStore.getState().setActiveCamera(cameraObject.linkedCameraId!);
+
+  const nextState = useDirectorStore.getState();
+
+  expect(nextState.selectedObjectId).toBe(cameraObject.id);
+  expect(nextState.directorInspectorMode).toBe("auto");
+  expect(selectRightPanelKind(nextState)).toBe("camera");
 });
 
 it("routes a selected crowd group to the role panel", () => {
@@ -448,6 +538,7 @@ it("auto-persists the latest director scene snapshot after scene changes", () =>
   useDirectorStore.getState().toggleViewportPanelsCollapsed();
   useDirectorStore.getState().addPresetCharacter("female");
   useDirectorStore.getState().updateScene({ backgroundColor: "#151515" });
+  useDirectorStore.getState().saveLatestSnapshot();
 
   const snapshot = localStorage.getItem("storyai-3d-director-desk-demo");
   expect(snapshot).not.toBeNull();
@@ -473,6 +564,7 @@ it("keeps persisted director scenes isolated per canvas card instance", () => {
   useDirectorStore.getState().openScopedScene("node_director_a");
   useDirectorStore.getState().setViewportAspectRatio("16:9");
   useDirectorStore.getState().updateScene({ backgroundColor: "#151515" });
+  useDirectorStore.getState().saveLatestSnapshot();
 
   expect(localStorage.getItem("storyai-3d-director-desk-demo:node_director_a")).not.toBeNull();
 
@@ -482,6 +574,7 @@ it("keeps persisted director scenes isolated per canvas card instance", () => {
   expect(useDirectorStore.getState().project.scene.backgroundColor).toBe("#000000");
 
   useDirectorStore.getState().updateScene({ backgroundColor: "#303640" });
+  useDirectorStore.getState().saveLatestSnapshot();
 
   expect(localStorage.getItem("storyai-3d-director-desk-demo:node_director_b")).not.toBeNull();
 

@@ -1,4 +1,8 @@
-const LOCAL_MODEL_EXTENSION_RE = /\.(fbx|obj)$/i;
+import { isExperimentalModelFile, isSupportedModelFile } from "mivo-model-viewer/core";
+
+const LOCAL_MODEL_EXTENSION_RE = /\.(glb|gltf|obj|fbx|stl|ply|dae|3mf|3ds|zip)$/i;
+export const LOCAL_MODEL_ACCEPT = ".glb,.gltf,.obj,.fbx,.stl,.ply,.dae,.3mf,.3ds,.zip";
+const LOCAL_MODEL_FORMAT_LABEL = "GLB / GLTF / OBJ / FBX / STL / PLY / DAE / 3MF / 3DS / ZIP";
 
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -18,8 +22,12 @@ function readFileAsDataUrl(file: File) {
 }
 
 export async function readLocalModelFile(file: File) {
-  if (!LOCAL_MODEL_EXTENSION_RE.test(file.name)) {
-    throw new Error("当前仅支持 FBX / OBJ 模型文件");
+  if (isExperimentalModelFile(file)) {
+    throw new Error("当前不支持实验性 VRML / STEP 模型格式");
+  }
+
+  if (!isSupportedModelFile(file) || !LOCAL_MODEL_EXTENSION_RE.test(file.name)) {
+    throw new Error(`当前仅支持 ${LOCAL_MODEL_FORMAT_LABEL} 模型文件`);
   }
 
   return {

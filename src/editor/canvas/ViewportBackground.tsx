@@ -1,8 +1,7 @@
 import { Html } from "@react-three/drei";
-import { useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useState } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  BackSide,
   ClampToEdgeWrapping,
   Color,
   EquirectangularReflectionMapping,
@@ -10,6 +9,9 @@ import {
   SRGBColorSpace,
   Texture,
   TextureLoader,
+  Vector3,
+  type Mesh,
+  type PerspectiveCamera,
 } from "three";
 import type { DirectorAssetRef, PanoramaProjectionMode } from "../schema/directorProject";
 import { getPanoramaRotationRadians } from "./panoramaMath";
@@ -24,16 +26,14 @@ export function configurePanoramaTexture(texture: Texture, projectionMode: Panor
   texture.colorSpace = SRGBColorSpace;
   if (projectionMode === "equirectangular") {
     texture.mapping = EquirectangularReflectionMapping;
-    texture.repeat.set(1, 1);
-    texture.offset.set(0, 0);
   } else {
     texture.wrapS = ClampToEdgeWrapping;
     texture.wrapT = ClampToEdgeWrapping;
     texture.minFilter = LinearFilter;
     texture.magFilter = LinearFilter;
-    texture.repeat.set(-1, 1);
-    texture.offset.set(1, 0);
   }
+  texture.repeat.set(1, 1);
+  texture.offset.set(0, 0);
   texture.needsUpdate = true;
   return texture;
 }
@@ -88,52 +88,98 @@ function usePanoramaTexture(url: string | null, projectionMode: PanoramaProjecti
   return state;
 }
 
+export function BackdropPlane({
+  texture,
+  distance,
+  offset,
+  scale,
+}: {
+  texture: Texture;
+  distance: number;
+  offset: [number, number];
+  scale: number;
+}) {
+  const meshRef = useRef<Mesh>(null);
+  const { camera } = useThree();
+  const forward = useMemo(() => new Vector3(), []);
+  const right = useMemo(() => new Vector3(), []);
+  const up = useMemo(() => new Vector3(), []);
+
+  useFrame(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+
+    const perspectiveCamera = camera as PerspectiveCamera;
+    const fovRadians = ((perspectiveCamera.fov ?? 50) * Math.PI) / 180;
+    const safeScale = Math.max(0.05, scale);
+    const height = (2 * distance * Math.tan(fovRadians / 2)) / safeScale;
+    const width = height * (perspectiveCamera.aspect ?? 1);
+
+    camera.getWorldDirection(forward);
+    right.crossVectors(forward, camera.up).normalize();
+    up.crossVectors(right, forward).normalize();
+
+    mesh.position
+      .copy(camera.position)
+      .addScaledVector(forward, distance)
+      .addScaledVector(right, offset[0])
+      .addScaledVector(up, offset[1]);
+    mesh.quaternion.copy(camera.quaternion);
+    mesh.scale.set(width, height, 1);
+  });
+
+  return (
+    <mesh ref={meshRef} frustumCulled={false} name="panorama-backdrop-plane" renderOrder={-1000}>
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial depthWrite={false} map={texture} toneMapped={false} />
+    </mesh>
+  );
+}
+
 export function ViewportBackground({
   backgroundColor,
   panoramaAsset,
   panoramaRadius,
   panoramaYaw,
+  projectionMode,
+  backdropScale = 1,
+  backdropOffset = [0, 0],
 }: {
   backgroundColor: string;
   panoramaAsset?: DirectorAssetRef | null;
   panoramaRadius: number;
   panoramaYaw: number;
+  projectionMode?: PanoramaProjectionMode;
+  backdropScale?: number;
+  backdropOffset?: [number, number];
 }) {
   const { gl, scene } = useThree();
-  const projectionMode = panoramaAsset?.projectionMode ?? "equirectangular";
-  const textureState = usePanoramaTexture(panoramaAsset?.url ?? null, projectionMode);
+  const mode = projectionMode ?? panoramaAsset?.projectionMode ?? "equirectangular";
+  const textureState = usePanoramaTexture(panoramaAsset?.url ?? null, mode);
   const safeRadius = Math.max(10, panoramaRadius);
   const rotationY = getPanoramaRotationRadians(panoramaYaw);
   const fallbackColor = useMemo(() => new Color(backgroundColor), [backgroundColor]);
 
   useEffect(() => {
     const nextBackground =
-      textureState.status === "ready" && projectionMode === "equirectangular" ? textureState.texture : fallbackColor;
+      textureState.status === "ready" && mode === "equirectangular" ? textureState.texture : fallbackColor;
 
     scene.background = nextBackground;
     scene.backgroundBlurriness = 0;
     scene.backgroundIntensity = 1;
-    scene.backgroundRotation.set(0, textureState.status === "ready" && projectionMode === "equirectangular" ? rotationY : 0, 0);
+    scene.backgroundRotation.set(0, textureState.status === "ready" && mode === "equirectangular" ? rotationY : 0, 0);
     gl.setClearColor(fallbackColor, 1);
-  }, [fallbackColor, gl, projectionMode, rotationY, scene, textureState]);
+  }, [fallbackColor, gl, mode, rotationY, scene, textureState]);
 
   return (
     <>
-      {textureState.status === "ready" && projectionMode === "backdrop" ? (
-        <mesh
-          frustumCulled={false}
-          name="panorama-backdrop-dome"
-          renderOrder={-1000}
-          rotation={[0, rotationY, 0]}
-        >
-          <sphereGeometry args={[safeRadius, 96, 64]} />
-          <meshBasicMaterial
-            depthWrite={false}
-            map={textureState.texture}
-            side={BackSide}
-            toneMapped={false}
-          />
-        </mesh>
+      {textureState.status === "ready" && mode === "backdrop" ? (
+        <BackdropPlane
+          distance={safeRadius}
+          offset={backdropOffset}
+          scale={backdropScale}
+          texture={textureState.texture}
+        />
       ) : null}
       {textureState.status === "error" ? (
         <Html center>

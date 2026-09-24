@@ -265,7 +265,7 @@ export function CharacterPanel() {
               {
                 axis: "X",
                 ariaLabel: "角色缩放 X",
-                step: "0.01",
+                step: "0.1",
                 value: transform.scale[0],
                 onChange: (value) =>
                   isCrowd && selection.crowdId
@@ -279,7 +279,7 @@ export function CharacterPanel() {
               {
                 axis: "Y",
                 ariaLabel: "角色缩放 Y",
-                step: "0.01",
+                step: "0.1",
                 value: transform.scale[1],
                 onChange: (value) =>
                   isCrowd && selection.crowdId
@@ -293,7 +293,7 @@ export function CharacterPanel() {
               {
                 axis: "Z",
                 ariaLabel: "角色缩放 Z",
-                step: "0.01",
+                step: "0.1",
                 value: transform.scale[2],
                 onChange: (value) =>
                   isCrowd && selection.crowdId
@@ -362,11 +362,12 @@ export function CharacterPanel() {
                         <InspectorRangeNumberField
                           key={control.key}
                           label={control.label}
+                          axisPrefix={control.label}
                           rangeAriaLabel={`${group.title} · ${control.label} 滑杆`}
                           numberAriaLabel={`${group.title} · ${control.label}`}
-                          max="90"
-                          min="-90"
-                          step="1"
+                          max="50"
+                          min="-50"
+                          step="0.1"
                           value={role.characterRig?.controls[control.key] ?? 0}
                           onValueChange={(value) =>
                             isCrowd && selection.crowdId

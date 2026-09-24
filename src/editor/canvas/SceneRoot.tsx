@@ -1,10 +1,9 @@
 import { Html, Line, TransformControls, type TransformControlsProps } from "@react-three/drei";
-import { useLoader, type ThreeEvent } from "@react-three/fiber";
-import { Suspense, useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { type ThreeEvent } from "@react-three/fiber";
+import { disposeObject3D, loadModelObject } from "mivo-model-viewer/core";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Box3, Matrix4, Quaternion, Vector3, type Group, type Object3D } from "three";
 import type { TransformControls as TransformControlsImpl } from "three-stdlib";
-import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
-import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import type {
   DirectorAssetRef,
   DirectorCameraShot,
@@ -357,18 +356,6 @@ function NormalizedImportedObject({ object }: { object: Object3D }) {
   );
 }
 
-function FbxModel({ url }: { url: string }) {
-  const object = useLoader(FBXLoader, url);
-
-  return <NormalizedImportedObject object={object} />;
-}
-
-function ObjModel({ url }: { url: string }) {
-  const object = useLoader(OBJLoader, url);
-
-  return <NormalizedImportedObject object={object} />;
-}
-
 function ImportedModel({
   fileName,
   url,
@@ -376,9 +363,63 @@ function ImportedModel({
   fileName: string;
   url: string;
 }) {
-  if (/\.fbx$/i.test(fileName)) return <FbxModel url={url} />;
-  if (/\.obj$/i.test(fileName)) return <ObjModel url={url} />;
-  return null;
+  const [modelState, setModelState] = useState<{
+    fileName: string;
+    url: string;
+    object: Object3D | null;
+    error: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    const abortController = new AbortController();
+    let active = true;
+    let loadedObject: Object3D | null = null;
+
+    setModelState(null);
+
+    void loadModelObject(url, {
+      fileName,
+      center: false,
+      shadows: true,
+      signal: abortController.signal,
+    })
+      .then((result) => {
+        if (!active || abortController.signal.aborted) {
+          disposeObject3D(result.object);
+          return;
+        }
+
+        loadedObject = result.object;
+        setModelState({ fileName, url, object: result.object, error: null });
+      })
+      .catch((loadError) => {
+        if (!active || abortController.signal.aborted) return;
+        setModelState({
+          fileName,
+          url,
+          object: null,
+          error: loadError instanceof Error ? loadError.message : "模型文件解析失败",
+        });
+      });
+
+    return () => {
+      active = false;
+      abortController.abort();
+      if (loadedObject) disposeObject3D(loadedObject);
+    };
+  }, [fileName, url]);
+
+  const currentState = modelState?.fileName === fileName && modelState.url === url ? modelState : null;
+
+  if (currentState?.error) {
+    return (
+      <Html center role="alert">
+        <div className="capture-status">模型文件解析失败：{currentState.error}</div>
+      </Html>
+    );
+  }
+
+  return currentState?.object ? <NormalizedImportedObject object={currentState.object} /> : null;
 }
 
 function GeometryPrimitiveModel({
@@ -519,9 +560,7 @@ function ObjectSceneNode({
       }}
     >
       {isImportedModel && asset ? (
-        <Suspense fallback={null}>
-          <ImportedModel fileName={asset.fileName} url={asset.url} />
-        </Suspense>
+        <ImportedModel fileName={asset.fileName} url={asset.url} />
       ) : item.kind === "character" ? (
         <>
           <Suspense fallback={null}>

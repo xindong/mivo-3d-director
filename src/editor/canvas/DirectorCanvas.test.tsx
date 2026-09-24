@@ -36,8 +36,38 @@ beforeEach(() => {
   useDirectorStore.setState({
     ...useDirectorStore.getState(),
     ...createInitialDirectorState(),
+    cameraInspectorTab: "properties",
   });
 });
+
+function mockOverlaySafeAreaLayout() {
+  // jsdom has no layout engine, so the safe-area measurement needs explicit rectangles.
+  const rect = (left: number, top: number, right: number, bottom: number) =>
+    ({
+      left,
+      top,
+      right,
+      bottom,
+      width: right - left,
+      height: bottom - top,
+      x: left,
+      y: top,
+      toJSON: () => ({}),
+    }) as DOMRect;
+  const layout: Array<[string, DOMRect]> = [
+    [".director-shell-fullbleed .viewport-column", rect(0, 0, 1200, 800)],
+    [".director-shell-fullbleed .left-sidebar", rect(16, 0, 236, 800)],
+    [".director-shell-fullbleed .right-sidebar", rect(884, 0, 1184, 800)],
+  ];
+
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+    for (const [selector, value] of layout) {
+      if (this.matches(selector)) return value;
+    }
+
+    return rect(0, 0, 0, 0);
+  });
+}
 
 afterEach(() => {
   clearViewportCaptureHandler();
@@ -226,8 +256,8 @@ it("renders a live R3F viewport and director scene controls", () => {
 
   expect(screen.getByTestId("director-canvas")).toBeInTheDocument();
   expect(screen.getByLabelText("场景缩放")).toBeInTheDocument();
-  expect(screen.getByText("全景背景")).toBeInTheDocument();
-  expect(screen.getByText("全景球")).toBeInTheDocument();
+  expect(screen.getByLabelText("3D场景右侧属性面板")).toBeInTheDocument();
+  expect(screen.getByText("场景旋转")).toBeInTheDocument();
   expect(screen.getByTestId("orbit-controls")).toHaveAttribute("data-enabled", "true");
 });
 
@@ -255,17 +285,36 @@ it("does not render a full-viewport transform drag layer over the 3D viewport", 
   expect(screen.queryByRole("application", { name: "3D视口缩放拖拽层" })).not.toBeInTheDocument();
 });
 
-it("renders only the dark major viewport grid lines", () => {
+function enableSnapToGrid() {
+  const state = useDirectorStore.getState();
+
+  useDirectorStore.setState({
+    ...state,
+    project: {
+      ...state.project,
+      scene: {
+        ...state.project.scene,
+        snapToGrid: true,
+      },
+    },
+  });
+}
+
+it("renders the viewport grid with the shared neutral grid colour", () => {
+  enableSnapToGrid();
+
   render(<App />);
 
   expect(screen.getByTestId("viewport-grid")).toHaveAttribute("data-cell-thickness", "0");
+  expect(screen.getByTestId("viewport-grid")).toHaveAttribute("data-cell-color", "#4E4E4E");
   expect(screen.getByTestId("viewport-grid")).toHaveAttribute("data-position", "[0,0.002,0]");
-  expect(screen.getByTestId("viewport-grid")).toHaveAttribute("data-section-color", "#2A4065");
+  expect(screen.getByTestId("viewport-grid")).toHaveAttribute("data-section-color", "#4E4E4E");
   expect(screen.getByTestId("viewport-grid")).toHaveAttribute("data-fade-distance", "80");
   expect(screen.getByTestId("viewport-grid")).toHaveAttribute("data-infinite-grid", "true");
 });
 
 it("keeps the viewport grid slightly above the configured ground plane", () => {
+  enableSnapToGrid();
   useDirectorStore.setState({
     ...useDirectorStore.getState(),
     project: {
@@ -308,7 +357,7 @@ it("renders the viewport aspect ratio overlay when a non-auto frame is selected"
   render(<App />);
 
   expect(screen.getByLabelText("视口画幅框")).toBeInTheDocument();
-  expect(screen.getAllByLabelText("视口画幅遮罩")).toHaveLength(4);
+  expect(screen.getAllByLabelText("视口画幅遮罩")).toHaveLength(1);
   expect(screen.getByLabelText("视口画幅框")).toHaveAttribute("data-aspect-ratio", "9:16");
 });
 
@@ -346,13 +395,28 @@ it("renders the native 3D viewport gizmo in an overlay canvas above the aspect m
 });
 
 it("offsets the native viewport gizmo inward when overlay side panels are open", () => {
+  mockOverlaySafeAreaLayout();
+
   render(<App />);
 
   const gizmo = screen.getByLabelText("3D视口原生坐标控件");
 
   expect(gizmo).toHaveStyle({
-    right: "320px",
+    right: "336px",
   });
+});
+
+it("resets back to the director view from the button under the gizmo", () => {
+  useDirectorStore.setState({
+    ...useDirectorStore.getState(),
+    viewMode: "camera",
+  });
+
+  render(<App />);
+
+  fireEvent.click(screen.getByRole("button", { name: "重置视角" }));
+
+  expect(useDirectorStore.getState().viewMode).toBe("director");
 });
 
 it("syncs native viewport gizmo axis clicks back to the main director view", () => {
@@ -536,6 +600,8 @@ it("captures screenshots from the same safe-area frame shown by the aspect overl
     return originalCreateElement(tagName);
   }) as typeof document.createElement);
 
+  mockOverlaySafeAreaLayout();
+
   render(<App />);
 
   await requestViewportCapture({
@@ -544,8 +610,8 @@ it("captures screenshots from the same safe-area frame shown by the aspect overl
   });
 
   const expectedFrame = getViewportAspectFrameRect("16:9", 1000, 700, 124, {
-    left: 220,
-    right: 300,
+    left: 236,
+    right: 316,
     top: 0,
     bottom: 0,
   });

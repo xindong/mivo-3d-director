@@ -37,6 +37,9 @@ export interface SceneSettings {
   backgroundColor: string;
   panoramaYaw: number;
   panoramaRadius: number;
+  panoramaProjectionMode?: PanoramaProjectionMode;
+  backdropScale?: number;
+  backdropOffset?: [number, number];
   showLabels: boolean;
   snapToGrid: boolean;
   showGround: boolean;

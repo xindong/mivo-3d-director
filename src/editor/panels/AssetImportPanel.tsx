@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { readLocalModelFile } from "../loaders/localModelImport";
+import { LOCAL_MODEL_ACCEPT, readLocalModelFile } from "../loaders/localModelImport";
 import { readPanoramaFile } from "../loaders/panoramaImport";
 import { useDirectorStore } from "../store/directorStore";
 
@@ -31,7 +31,7 @@ export function AssetImportPanel() {
         导入本地模型
         <input
           aria-label="导入本地模型"
-          accept=".fbx,.obj"
+          accept={LOCAL_MODEL_ACCEPT}
           type="file"
           onChange={async (event) => {
             const input = event.currentTarget;
@@ -47,7 +47,11 @@ export function AssetImportPanel() {
           }}
         />
         <p className="asset-import-status">
-          {latestLocalModel ? `已导入本地模型: ${latestLocalModel.fileName}` : "支持 FBX / OBJ 素模文件"}
+          {latestLocalModel
+            ? `已导入本地模型: ${latestLocalModel.fileName}`
+            : "支持 GLB / GLTF / OBJ / FBX / STL / PLY / DAE / 3MF / 3DS / ZIP"}
+          <br />
+          GLTF / DAE 含外部贴图资源时建议 ZIP 打包导入
         </p>
       </label>
       <label className="asset-import-item">

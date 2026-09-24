@@ -36,11 +36,22 @@ it("shows a centered empty search state when no objects match", async () => {
   expect(screen.queryByRole("treeitem")).not.toBeInTheDocument();
 });
 
-it("shows visibility and lock controls for each object", () => {
+it("shows visibility, lock, and delete controls for each object", () => {
   render(<ObjectTreePanel />);
 
   expect(screen.getByLabelText("角色01 可见性")).toBeInTheDocument();
   expect(screen.getByLabelText("角色01 锁定")).toBeInTheDocument();
+  expect(screen.getByLabelText("删除 角色01")).toBeInTheDocument();
+});
+
+it("removes the object from its row delete button", async () => {
+  const user = userEvent.setup();
+  render(<ObjectTreePanel />);
+
+  await user.click(screen.getByLabelText("删除 角色01"));
+
+  expect(useDirectorStore.getState().project.objects.some((item) => item.id === "char_default_a")).toBe(false);
+  expect(screen.queryByLabelText("角色01 可见性")).not.toBeInTheDocument();
 });
 
 it("hides empty left panel groups and keeps the approved group order", () => {

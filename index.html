@@ -10,9 +10,36 @@
       #root {
         height: 100%;
         margin: 0;
-        background: #090909;
+      }
+
+      html {
+        background: #0c0c0c;
+        color-scheme: dark;
+      }
+
+      html[data-theme="light"] {
+        background: #ffffff;
+        color-scheme: light;
       }
     </style>
+    <script>
+      // Resolve the theme before the stylesheet loads so nothing flashes white.
+      (function () {
+        var theme = null;
+
+        try {
+          var fromQuery = new URLSearchParams(window.location.search).get("theme");
+
+          if (fromQuery === "light" || fromQuery === "dark") {
+            theme = fromQuery;
+          }
+        } catch (error) {
+          theme = null;
+        }
+
+        document.documentElement.dataset.theme = theme || "dark";
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

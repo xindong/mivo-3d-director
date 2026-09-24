@@ -77,7 +77,10 @@ export interface DirectorClipboardEntry {
   camera?: DirectorCameraShot;
 }
 
+export type CameraInspectorTab = "properties" | "captures";
+
 interface DirectorInternalState {
+  cameraInspectorTab: CameraInspectorTab;
   clipboard: DirectorClipboardEntry[];
   clipboardPasteCount: number;
   undoStack: DirectorState[];
@@ -123,6 +126,7 @@ export interface DirectorActions {
   updatePoseControl: (id: string, key: string, value: number) => void;
   updateCrowdPoseControl: (crowdId: string, key: string, value: number) => void;
   setActiveCamera: (cameraId: string) => void;
+  setCameraInspectorTab: (tab: CameraInspectorTab) => void;
   addCameraCaptures: (cameraId: string | null | undefined, dataUrls: string[]) => void;
   updateCamera: (
     cameraId: string,
@@ -138,6 +142,7 @@ export interface DirectorActions {
   undo: () => void;
   openScopedScene: (scopeId: string | null | undefined) => void;
   replaceProject: (project: DirectorProject) => void;
+  resetDirectorScene: () => void;
   saveLatestSnapshot: () => void;
   restoreLatestSnapshot: () => void;
 }
@@ -153,8 +158,10 @@ const DEFAULT_SCENE: SceneSettings = {
   backgroundColor: "#000000",
   panoramaYaw: 0,
   panoramaRadius: 60,
+  backdropScale: 1,
+  backdropOffset: [0, 0] as [number, number],
   showLabels: true,
-  snapToGrid: false,
+  snapToGrid: true,
   showGround: true,
   groundOpacity: 0.4,
   groundHeight: 0,
@@ -386,10 +393,161 @@ function writePersistedDirectorState(state: DirectorState) {
   }
 }
 
+let persistedStateDirty = false;
+
+function markPersistedStateDirty() {
+  persistedStateDirty = true;
+}
+
+function flushPersistedDirectorState() {
+  if (!persistedStateDirty) return;
+
+  persistedStateDirty = false;
+  writePersistedDirectorState(extractPersistedDirectorState(useDirectorStore.getState() as DirectorRuntimeState));
+}
+
+function writeLatestSnapshotNow() {
+  persistedStateDirty = false;
+  writePersistedDirectorState(extractPersistedDirectorState(useDirectorStore.getState() as DirectorRuntimeState));
+}
+
+if (typeof window !== "undefined") {
+  // Persisting is deferred to the exit path so dragging never touches storage.
+  window.addEventListener("beforeunload", (event) => {
+    flushPersistedDirectorState();
+    event.preventDefault();
+    event.returnValue = "离开后可能有未保存的修改丢失";
+    return event.returnValue;
+  });
+  window.addEventListener("pagehide", () => flushPersistedDirectorState());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      flushPersistedDirectorState();
+    }
+  });
+}
+
 function createStateFromPersistedProject(project: DirectorProject, options: DirectorStateOptions = {}): DirectorState {
   return {
     ...DEFAULT_UI_STATE,
     project: withPersistedLocalAssets(migrateDirectorProject(cloneJsonValue(project)), options.includePersistedLocalAssets),
+  };
+}
+
+function isFiniteNumberTuple(value: unknown): value is [number, number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length === 3 &&
+    value.every((item) => typeof item === "number" && Number.isFinite(item))
+  );
+}
+
+function isFiniteNumberPair(value: unknown): value is [number, number] {
+  return (
+    Array.isArray(value) && value.length === 2 && value.every((item) => typeof item === "number" && Number.isFinite(item))
+  );
+}
+
+function isUsableAssetUrl(url: unknown): url is string {
+  return typeof url === "string" && url.length > 0 && !url.startsWith("blob:");
+}
+
+function sanitizeTransform(value: unknown): DirectorTransform {
+  const transform = (value ?? {}) as Partial<DirectorTransform>;
+  const scale = isFiniteNumberTuple(transform.scale) ? transform.scale : ([1, 1, 1] as [number, number, number]);
+
+  return {
+    position: isFiniteNumberTuple(transform.position) ? transform.position : [0, 0, 0],
+    rotation: isFiniteNumberTuple(transform.rotation) ? transform.rotation : [0, 0, 0],
+    scale: scale.map((item) => (Math.abs(item) < 1e-4 ? 1 : item)) as [number, number, number],
+  };
+}
+
+function sanitizeRestoredProject(project: DirectorProject): DirectorProject {
+  const assets = project.assets.filter(
+    (asset) => asset && typeof asset.id === "string" && isUsableAssetUrl(asset.url)
+  );
+  const assetIds = new Set(assets.map((asset) => asset.id));
+
+  const cameras = project.cameras
+    .filter((camera) => camera && typeof camera.id === "string")
+    .map((camera) => {
+      const fov = typeof camera.fov === "number" && Number.isFinite(camera.fov) ? camera.fov : 50;
+
+      return {
+        ...camera,
+        fov,
+        transform: sanitizeTransform(camera.transform),
+        target: isFiniteNumberTuple(camera.target) ? camera.target : ([0, 1.2, 0] as [number, number, number]),
+        captures: Array.isArray(camera.captures)
+          ? camera.captures.filter((capture) => capture && isUsableAssetUrl(capture.dataUrl))
+          : [],
+      };
+    });
+  const cameraIds = new Set(cameras.map((camera) => camera.id));
+
+  const objects = project.objects
+    .filter((object) => object && typeof object.id === "string")
+    .map((object) => ({
+      ...object,
+      transform: sanitizeTransform(object.transform),
+      assetRefId: object.assetRefId && assetIds.has(object.assetRefId) ? object.assetRefId : undefined,
+      linkedCameraId:
+        object.linkedCameraId && cameraIds.has(object.linkedCameraId) ? object.linkedCameraId : undefined,
+    }));
+
+  const scene = project.scene ?? DEFAULT_SCENE;
+
+  return {
+    ...project,
+    assets,
+    cameras,
+    objects,
+    panoramaAssetId:
+      project.panoramaAssetId && assetIds.has(project.panoramaAssetId) ? project.panoramaAssetId : null,
+    activeCameraId:
+      project.activeCameraId && cameraIds.has(project.activeCameraId)
+        ? project.activeCameraId
+        : cameras[0]?.id ?? null,
+    scene: {
+      ...scene,
+      backgroundColor: typeof scene.backgroundColor === "string" ? scene.backgroundColor : "#000000",
+      scale: Number.isFinite(scene.scale) && scene.scale > 0 ? scene.scale : 1,
+      position: isFiniteNumberTuple(scene.position) ? scene.position : [0, 0, 0],
+      rotation: isFiniteNumberTuple(scene.rotation) ? scene.rotation : [0, 0, 0],
+      panoramaYaw: Number.isFinite(scene.panoramaYaw) ? scene.panoramaYaw : 0,
+      panoramaRadius: Number.isFinite(scene.panoramaRadius) ? scene.panoramaRadius : 60,
+      groundOpacity: Number.isFinite(scene.groundOpacity) ? scene.groundOpacity : 0.4,
+      groundHeight: Number.isFinite(scene.groundHeight) ? scene.groundHeight : 0,
+      backdropScale: Number.isFinite(scene.backdropScale) ? (scene.backdropScale as number) : 1,
+      backdropOffset: isFiniteNumberPair(scene.backdropOffset) ? scene.backdropOffset : ([0, 0] as [number, number]),
+    },
+  };
+}
+
+function sanitizeRestoredState(state: DirectorState): DirectorState {
+  const project = sanitizeRestoredProject(state.project);
+  const objectIds = new Set(project.objects.map((item) => item.id));
+  const crowdIds = new Set(
+    project.objects.map((item) => item.crowdId).filter((crowdId): crowdId is string => typeof crowdId === "string")
+  );
+  const selectedObjectIds = state.selectedObjectIds.filter((id) => objectIds.has(id));
+  const selectedObjectId =
+    state.selectedObjectId && objectIds.has(state.selectedObjectId)
+      ? state.selectedObjectId
+      : selectedObjectIds[selectedObjectIds.length - 1] ?? null;
+
+  return {
+    ...state,
+    project,
+    selectedObjectId,
+    selectedObjectIds: selectedObjectId
+      ? selectedObjectIds.includes(selectedObjectId)
+        ? selectedObjectIds
+        : [...selectedObjectIds, selectedObjectId]
+      : [],
+    selectedCrowdId:
+      state.selectedCrowdId && crowdIds.has(state.selectedCrowdId) ? state.selectedCrowdId : null,
   };
 }
 
@@ -404,7 +562,7 @@ function readPersistedDirectorState(options: DirectorStateOptions = {}): Directo
     const parsed = JSON.parse(snapshot) as unknown;
 
     if (isDirectorProjectShape(parsed)) {
-      return createStateFromPersistedProject(parsed, options);
+      return sanitizeRestoredState(createStateFromPersistedProject(parsed, options));
     }
 
     if (!parsed || typeof parsed !== "object") return null;
@@ -412,7 +570,7 @@ function readPersistedDirectorState(options: DirectorStateOptions = {}): Directo
     const state = parsed as Partial<DirectorState>;
     if (!isDirectorProjectShape(state.project)) return null;
 
-    return {
+    return sanitizeRestoredState({
       viewMode: state.viewMode === "camera" ? "camera" : "director",
       selectedObjectId: typeof state.selectedObjectId === "string" ? state.selectedObjectId : null,
       selectedObjectIds: Array.isArray(state.selectedObjectIds)
@@ -429,7 +587,7 @@ function readPersistedDirectorState(options: DirectorStateOptions = {}): Directo
         migrateDirectorProject(cloneJsonValue(state.project)),
         options.includePersistedLocalAssets
       ),
-    };
+    });
   } catch {
     return null;
   }
@@ -440,6 +598,7 @@ function createRuntimeStateFromPersistedState(state: DirectorState): DirectorRun
 
   return {
     ...snapshot,
+    cameraInspectorTab: "properties",
     clipboard: [],
     clipboardPasteCount: 0,
     undoStack: [],
@@ -1044,6 +1203,21 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
 
     set((state) => {
       const currentState = state as DirectorRuntimeState;
+
+      // Drag / scrub batches fire every frame: no snapshots, no deep compare, no serialising.
+      if (trackUndo && currentState.undoBatchDepth > 0) {
+        const batchedState = updater(currentState);
+
+        if (batchedState === currentState) return currentState;
+        if (persist) markPersistedStateDirty();
+
+        return {
+          ...batchedState,
+          undoBatchSnapshot: currentState.undoBatchSnapshot ?? createUndoStackEntry(currentState),
+          undoBatchHasTrackedChanges: true,
+        };
+      }
+
       const previousSnapshot = createUndoStackEntry(currentState);
       const nextState = updater(currentState);
       const nextSnapshot = extractPersistedDirectorState(nextState);
@@ -1074,7 +1248,7 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
       };
 
       if (persist) {
-        writePersistedDirectorState(extractPersistedDirectorState(runtimeState));
+        markPersistedStateDirty();
       }
 
       return runtimeState;
@@ -1520,6 +1694,10 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
               ...state.project,
               assets: [...state.project.assets, nextAsset],
               panoramaAssetId: assetId,
+              scene: {
+                ...state.project.scene,
+                panoramaProjectionMode: input.projectionMode === "backdrop" ? "backdrop" : "equirectangular",
+              },
             },
           };
         }
@@ -1917,6 +2095,11 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
           ),
         },
       })),
+    setCameraInspectorTab: (tab) =>
+      commitUiMutation((state) => ({
+        ...state,
+        cameraInspectorTab: tab,
+      })),
     setActiveCamera: (cameraId) =>
       commitUiMutation((state) => {
         const selectedObjectId =
@@ -1932,6 +2115,7 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
           selectedObjectId,
           selectedObjectIds: selectedObjectId ? [selectedObjectId] : [],
           selectedCrowdId: null,
+          directorInspectorMode: "auto",
         };
       }),
     addCameraCaptures: (cameraId, dataUrls) =>
@@ -2038,8 +2222,28 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
         selectedCrowdId: null,
         directorInspectorMode: "auto",
       })),
+    resetDirectorScene: () => {
+      const currentState = get() as DirectorRuntimeState;
+      const storage = getLocalStorageSafe();
+
+      try {
+        storage?.removeItem(getDirectorSceneStorageKey());
+      } catch {
+        // A broken or blocked storage must not stop the in-memory reset.
+      }
+
+      const snapshot = createInitialDirectorState();
+
+      set({
+        ...createRuntimeStateFromPersistedState(snapshot),
+        clipboard: currentState.clipboard,
+        clipboardPasteCount: currentState.clipboardPasteCount,
+      });
+      writePersistedDirectorState(snapshot);
+      writePersistedLocalModelAssets([]);
+    },
     saveLatestSnapshot: () => {
-      writePersistedDirectorState(extractPersistedDirectorState(get() as DirectorRuntimeState));
+      writeLatestSnapshotNow();
     },
     restoreLatestSnapshot: () => {
       const snapshot = readPersistedDirectorState({ includePersistedLocalAssets: true, includePersistedScene: true });

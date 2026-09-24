@@ -1,6 +1,6 @@
 import "./styles/index.css";
 import { useEffect } from "react";
-import { X } from "lucide-react";
+import { Box, Camera } from "lucide-react";
 import { DirectorDeskShell } from "./app/layout/DirectorDeskShell";
 import { DirectorCanvas } from "./editor/canvas/DirectorCanvas";
 import { initDirectorDeskHostBridge } from "./editor/io/hostBridge";
@@ -20,10 +20,6 @@ export default function App() {
     initDirectorDeskHostBridge();
     window.parent?.postMessage({ type: "storyai:director-desk-ready" }, window.location.origin);
   }, []);
-
-  function handleClose() {
-    window.parent?.postMessage({ type: "storyai:director-desk-close" }, window.location.origin);
-  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -58,45 +54,31 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="top-bar">
-        <div className="top-bar-left">
-          <h1 className="top-bar-title">3D导演台</h1>
-        </div>
-        <div className="top-bar-center">
-          <div className="mode-toggle ui-segmented" role="group" aria-label="视角切换">
-            <button
-              className={`mode-toggle-button ui-segmented-item ${viewMode === "director" ? "ui-segmented-item-active" : ""}`}
-              aria-pressed={viewMode === "director"}
-              type="button"
-              onClick={() => setViewMode("director")}
-            >
-              导演视角
-            </button>
-            <button
-              className={`mode-toggle-button ui-segmented-item ${viewMode === "camera" ? "ui-segmented-item-active" : ""}`}
-              aria-pressed={viewMode === "camera"}
-              type="button"
-              onClick={() => setViewMode("camera")}
-            >
-              机位视角
-            </button>
-          </div>
-        </div>
-        <div className="top-bar-actions">
-          <button
-            className="top-bar-action-button"
-            type="button"
-            aria-label="关闭"
-            title="关闭"
-            onClick={handleClose}
-          >
-            <X aria-hidden="true" size={16} strokeWidth={1.8} />
-          </button>
-        </div>
-      </header>
       <DirectorDeskShell>
         <DirectorCanvas />
       </DirectorDeskShell>
+      <div className="viewport-mode-control">
+        <div className="mode-toggle viewport-mode-toggle ui-segmented" role="group" aria-label="视角切换">
+          <button
+            className={`mode-toggle-button ui-segmented-item ${viewMode === "director" ? "ui-segmented-item-active" : ""}`}
+            aria-pressed={viewMode === "director"}
+            type="button"
+            onClick={() => setViewMode("director")}
+          >
+            <Box aria-hidden="true" size={16} strokeWidth={1.8} />
+            <span>导演视角</span>
+          </button>
+          <button
+            className={`mode-toggle-button ui-segmented-item ${viewMode === "camera" ? "ui-segmented-item-active" : ""}`}
+            aria-pressed={viewMode === "camera"}
+            type="button"
+            onClick={() => setViewMode("camera")}
+          >
+            <Camera aria-hidden="true" size={16} strokeWidth={1.8} />
+            <span>机位视角</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

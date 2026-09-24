@@ -6,10 +6,10 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
-  type MouseEvent,
+  type CSSProperties,
   type ReactNode,
 } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useDirectorStore } from "../store/directorStore";
 
 type InspectorTab = {
@@ -53,6 +53,7 @@ type RangeNumberFieldProps = {
   min: string | number;
   max: string | number;
   step: string | number;
+  axisPrefix?: string;
 };
 
 type InspectorSelectOption = {
@@ -67,33 +68,36 @@ type OptionElementProps = {
   children?: ReactNode;
 };
 
-const AXIS_DRAG_PIXELS_PER_STEP = 10;
+function clampValue(value: number, min?: string | number, max?: string | number) {
+  const parsedMin = parseFiniteNumber(min);
+  const parsedMax = parseFiniteNumber(max);
+  const lowerBounded = parsedMin === null ? value : Math.max(parsedMin, value);
+
+  return parsedMax === null ? lowerBounded : Math.min(parsedMax, lowerBounded);
+}
+
+function getRangeProgressStyle(value: FieldValue, min: string | number, max: string | number): CSSProperties {
+  const parsedValue = Number(value);
+  const parsedMin = Number(min);
+  const parsedMax = Number(max);
+
+  if (
+    !Number.isFinite(parsedValue) ||
+    !Number.isFinite(parsedMin) ||
+    !Number.isFinite(parsedMax) ||
+    parsedMax <= parsedMin
+  ) {
+    return {};
+  }
+
+  const percent = Math.min(100, Math.max(0, ((parsedValue - parsedMin) / (parsedMax - parsedMin)) * 100));
+
+  return { "--range-progress": `${percent}%` } as CSSProperties;
+}
 
 function parseFiniteNumber(value: FieldValue | undefined) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function parseStep(step: string | undefined) {
-  const parsed = parseFiniteNumber(step);
-  return parsed && parsed > 0 ? parsed : 1;
-}
-
-function decimalPlaces(value: FieldValue | undefined) {
-  const stringValue = String(value ?? "");
-  const decimal = stringValue.match(/\.(\d+)/);
-  return decimal ? decimal[1].length : 0;
-}
-
-function clampValue(value: number, min?: string, max?: string) {
-  const parsedMin = parseFiniteNumber(min);
-  const parsedMax = parseFiniteNumber(max);
-  const lowerBounded = parsedMin === null ? value : Math.max(parsedMin, value);
-  return parsedMax === null ? lowerBounded : Math.min(parsedMax, lowerBounded);
-}
-
-function formatDraggedValue(value: number, precision: number) {
-  return Number(value.toFixed(Math.min(precision, 6))).toString();
 }
 
 function stringifyOptionLabel(children: ReactNode) {
@@ -161,9 +165,6 @@ export function InspectorPanel({
 }) {
   return (
     <section className={`panel-card right-inspector${className ? ` ${className}` : ""}`} aria-label={ariaLabel}>
-      <header className="right-inspector-header">
-        <h2 className="right-inspector-title">{title}</h2>
-      </header>
       {tabs ? (
         <div className="tab-row right-inspector-tabs" role="tablist" aria-label={`${title}面板标签`}>
           {tabs.map((tab) => (
@@ -321,106 +322,131 @@ export function InspectorAxisGroup({ label, axes }: { label: string; axes: AxisC
   return (
     <div className="inspector-field inspector-axis-group" role="group" aria-label={label}>
       <span className="inspector-field-label">{label}</span>
-      <div className="inspector-axis-row">
-        {axes.map((control) => (
-          <InspectorAxisInput key={control.ariaLabel} control={control} />
-        ))}
-      </div>
+      {axes.map((control) => (
+        <AxisSliderRow key={control.ariaLabel} control={control} />
+      ))}
     </div>
   );
 }
 
-function InspectorAxisInput({ control }: { control: AxisControl }) {
-  const [isDragging, setIsDragging] = useState(false);
-  const cleanupDragRef = useRef<(() => void) | null>(null);
-  const { beginInteraction, endInteraction } = useUndoBatchInteraction();
+function DraftNumberInput({
+  ariaLabel,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  onFocus,
+  onBlur,
+}: {
+  ariaLabel: string;
+  value: FieldValue;
+  min?: string | number;
+  max?: string | number;
+  step?: string | number;
+  onChange: (value: string) => void;
+  onFocus: () => void;
+  onBlur: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const currentValue = draft ?? String(value);
 
-  useEffect(() => () => cleanupDragRef.current?.(), []);
+  function nudge(direction: 1 | -1) {
+    const parsedStep = parseFiniteNumber(step) ?? 1;
+    const parsedValue = parseFiniteNumber(currentValue) ?? parseFiniteNumber(value) ?? 0;
+    const nextValue = clampValue(parsedValue + direction * parsedStep, min, max);
+    const formatted = String(Number(nextValue.toFixed(6)));
 
-  function applyDeltaFromValue(deltaSteps: number, value: FieldValue) {
-    const step = parseStep(control.step);
-    const startValue = parseFiniteNumber(value) ?? 0;
-    const precision = Math.max(decimalPlaces(control.step), decimalPlaces(value));
-    const nextValue = clampValue(startValue + deltaSteps * step, control.min, control.max);
-    control.onChange(formatDraggedValue(nextValue, precision));
-  }
-
-  function handlePrefixMouseDown(event: MouseEvent<HTMLButtonElement>) {
-    if (event.button !== 0) return;
-
-    event.currentTarget.focus();
-    event.preventDefault();
-    event.stopPropagation();
-    cleanupDragRef.current?.();
-    beginInteraction();
-    setIsDragging(true);
-
-    const startX = event.clientX;
-    const startValue = parseFiniteNumber(control.value) ?? 0;
-    const step = parseStep(control.step);
-    const precision = Math.max(decimalPlaces(control.step), decimalPlaces(control.value));
-    let previousValue = formatDraggedValue(startValue, precision);
-
-    const handleMouseMove = (moveEvent: globalThis.MouseEvent) => {
-      moveEvent.preventDefault();
-      const deltaSteps = Math.round((moveEvent.clientX - startX) / AXIS_DRAG_PIXELS_PER_STEP);
-      const nextValue = clampValue(startValue + deltaSteps * step, control.min, control.max);
-      const formattedValue = formatDraggedValue(nextValue, precision);
-
-      if (formattedValue !== previousValue) {
-        previousValue = formattedValue;
-        control.onChange(formattedValue);
-      }
-    };
-
-    const stopDrag = () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", stopDrag);
-      cleanupDragRef.current = null;
-      setIsDragging(false);
-      endInteraction();
-    };
-
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", stopDrag);
-    cleanupDragRef.current = stopDrag;
-  }
-
-  function handlePrefixKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      applyDeltaFromValue(1, control.value);
-    }
-
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      applyDeltaFromValue(-1, control.value);
-    }
+    setDraft(null);
+    onChange(formatted);
   }
 
   return (
-    <div className={`inspector-axis-input${isDragging ? " is-dragging" : ""}`}>
-      <button
-        aria-label={`${control.ariaLabel} 拖动调整`}
-        className="inspector-axis-prefix"
-        type="button"
-        onKeyDown={handlePrefixKeyDown}
-        onMouseDown={handlePrefixMouseDown}
-      >
-        {control.axis}
-      </button>
+    <span className="inspector-number-input">
       <input
-        aria-label={control.ariaLabel}
-        className="inspector-axis-value"
-        max={control.max}
-        min={control.min}
-        step={control.step}
+        aria-label={ariaLabel}
+        className="inspector-text-input inspector-range-value"
+        max={max}
+        min={min}
+        step={step}
         type="number"
-        value={control.value}
-        onChange={(event) => control.onChange(event.currentTarget.value)}
-        onBlur={endInteraction}
-        onFocus={beginInteraction}
+        value={currentValue}
+        onBlur={() => {
+          const current = currentValue;
+
+          setDraft(null);
+          onBlur(current);
+        }}
+        onChange={(event) => {
+          const next = event.currentTarget.value;
+          setDraft(next);
+
+          if (next.trim() === "" || !Number.isFinite(Number(next))) return;
+
+          onChange(next);
+        }}
+        onFocus={onFocus}
       />
+      <span className="inspector-number-stepper">
+        <button aria-label={`${ariaLabel} 增加`} type="button" onClick={() => nudge(1)}>
+          <ChevronUp aria-hidden="true" size={12} strokeWidth={2.2} />
+        </button>
+        <button aria-label={`${ariaLabel} 减少`} type="button" onClick={() => nudge(-1)}>
+          <ChevronDown aria-hidden="true" size={12} strokeWidth={2.2} />
+        </button>
+      </span>
+    </span>
+  );
+}
+
+const AXIS_VALUE_MIN = -50;
+const AXIS_VALUE_MAX = 50;
+const AXIS_VALUE_STEP = "0.1";
+
+function resolveAxisRange(control: AxisControl) {
+  const min = parseFiniteNumber(control.min);
+  const max = parseFiniteNumber(control.max);
+  if (min !== null && max !== null) return { min, max };
+
+  return { min: AXIS_VALUE_MIN, max: AXIS_VALUE_MAX };
+}
+
+function AxisSliderRow({ control }: { control: AxisControl }) {
+  const { beginInteraction, endInteraction } = useUndoBatchInteraction();
+  const range = resolveAxisRange(control);
+  const step = control.step ?? AXIS_VALUE_STEP;
+
+  return (
+    <div className="inspector-field inspector-range-field has-axis-prefix">
+      <span className="inspector-range-axis" aria-hidden="true">
+        {control.axis}
+      </span>
+      <div className="inspector-range-row">
+        <input
+          aria-label={`${control.ariaLabel} 滑杆`}
+          className="inspector-range"
+          max={range.max}
+          min={range.min}
+          step={step}
+          style={getRangeProgressStyle(control.value, range.min, range.max)}
+          type="range"
+          value={control.value}
+          onChange={(event) => control.onChange(event.currentTarget.value)}
+          onPointerCancel={endInteraction}
+          onPointerDown={beginInteraction}
+          onPointerUp={endInteraction}
+        />
+        <DraftNumberInput
+          ariaLabel={control.ariaLabel}
+          max={range.max}
+          min={range.min}
+          step={step}
+          value={control.value}
+          onBlur={endInteraction}
+          onChange={(next) => control.onChange(next)}
+          onFocus={beginInteraction}
+        />
+      </div>
     </div>
   );
 }
@@ -437,6 +463,7 @@ export function InspectorRangeNumberField({
   min,
   max,
   step,
+  axisPrefix,
 }: RangeNumberFieldProps) {
   const rangeDragCleanupRef = useRef<(() => void) | null>(null);
   const { beginInteraction, endInteraction } = useUndoBatchInteraction();
@@ -459,8 +486,14 @@ export function InspectorRangeNumberField({
   }
 
   return (
-    <div className="inspector-field inspector-range-field">
-      <span className="inspector-field-label">{label}</span>
+    <div className={`inspector-field inspector-range-field${axisPrefix ? " has-axis-prefix" : ""}`}>
+      {axisPrefix ? (
+        <span className="inspector-range-axis" aria-hidden="true">
+          {axisPrefix}
+        </span>
+      ) : (
+        <span className="inspector-field-label">{label}</span>
+      )}
       <div className="inspector-range-row">
         <input
           aria-label={rangeAriaLabel}
@@ -468,6 +501,7 @@ export function InspectorRangeNumberField({
           max={max}
           min={min}
           step={step}
+          style={getRangeProgressStyle(value, min, max)}
           type="range"
           value={value}
           onChange={(event) => (onRangeChange ?? onValueChange)(event.currentTarget.value)}
@@ -475,19 +509,17 @@ export function InspectorRangeNumberField({
           onPointerDown={beginRangeDrag}
           onPointerUp={stopRangeDrag}
         />
-        <input
-          aria-label={numberAriaLabel}
-          className="inspector-text-input inspector-range-value"
+        <DraftNumberInput
+          ariaLabel={numberAriaLabel}
           max={max}
           min={min}
           step={step}
-          type="number"
           value={value}
-          onBlur={(event) => {
-            onNumberBlur?.(event.currentTarget.value);
+          onBlur={(next) => {
+            onNumberBlur?.(next);
             endInteraction();
           }}
-          onChange={(event) => (onNumberChange ?? onValueChange)(event.currentTarget.value)}
+          onChange={(next) => (onNumberChange ?? onValueChange)(next)}
           onFocus={beginInteraction}
         />
       </div>

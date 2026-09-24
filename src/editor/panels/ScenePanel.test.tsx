@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach } from "vitest";
+import { beforeEach, vi } from "vitest";
 import { createInitialDirectorState, useDirectorStore } from "../store/directorStore";
 import { ScenePanel } from "./ScenePanel";
 
@@ -11,25 +11,66 @@ beforeEach(() => {
   });
 });
 
+function connectPanorama(fileName = "studio-panorama.jpg") {
+  const state = useDirectorStore.getState();
+
+  useDirectorStore.setState({
+    ...state,
+    project: {
+      ...state.project,
+      assets: [
+        {
+          id: "asset_panorama_1",
+          kind: "panorama",
+          sourceType: "image",
+          fileName,
+          url: "data:image/jpeg;base64,panorama-preview",
+        },
+      ],
+      panoramaAssetId: "asset_panorama_1",
+    },
+  });
+}
+
 it("uses the provided right inspector layout for scene properties", () => {
   const { container } = render(<ScenePanel />);
 
   expect(screen.getByLabelText("3D场景右侧属性面板")).toHaveClass("right-inspector", "scene-inspector");
-  expect(container.querySelector(".right-inspector-header")).toBeInTheDocument();
+  expect(container.querySelector(".right-inspector-header")).not.toBeInTheDocument();
+  expect(screen.queryByText("3D场景")).not.toBeInTheDocument();
   expect(container.querySelector(".right-inspector-content")).toBeInTheDocument();
-  expect(screen.getByLabelText("场景平移 X").closest(".inspector-axis-input")).toBeInTheDocument();
+  expect(screen.getByLabelText("场景平移 X").closest(".inspector-range-field")).toBeInTheDocument();
+});
+
+it("renders the scene inspector as scene, panorama, ground, and misc tabs", async () => {
+  const user = userEvent.setup();
+  render(<ScenePanel />);
+
+  expect(screen.getByRole("button", { name: "场景" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "全景" })).toHaveAttribute("aria-pressed", "false");
+  expect(screen.getByRole("button", { name: "地面" })).toHaveAttribute("aria-pressed", "false");
+  expect(screen.getByRole("button", { name: "其他" })).toHaveAttribute("aria-pressed", "false");
+  expect(screen.getByLabelText("场景平移 X")).toBeInTheDocument();
+  expect(screen.queryByLabelText("全景半径")).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "全景" }));
+
+  expect(screen.getByLabelText("全景半径")).toBeInTheDocument();
+  expect(screen.queryByLabelText("场景平移 X")).not.toBeInTheDocument();
 });
 
 it("lays scene switches out in one row and only toggles from the checkbox", async () => {
   const user = userEvent.setup();
   const { container } = render(<ScenePanel />);
 
+  await user.click(screen.getByRole("button", { name: "其他" }));
+
   const switchRow = container.querySelector(".scene-switch-row");
   const labelText = screen.getByText("角色标签");
   const checkbox = screen.getByLabelText("角色标签");
 
   expect(switchRow).toBeInTheDocument();
-  expect(switchRow?.querySelectorAll(".inspector-toggle-row")).toHaveLength(3);
+  expect(switchRow?.querySelectorAll(".inspector-toggle-row")).toHaveLength(2);
   expect(checkbox).toBeChecked();
 
   await user.click(labelText);
@@ -51,14 +92,25 @@ it("updates scene transform, panorama, and ground controls", async () => {
   await user.type(screen.getByLabelText("场景平移 Y"), "2");
   await user.clear(screen.getByLabelText("场景旋转 Z"));
   await user.type(screen.getByLabelText("场景旋转 Z"), "45");
+
+  await user.click(screen.getByRole("button", { name: "全景" }));
+
   await user.clear(screen.getByLabelText("天空颜色 HEX"));
   await user.type(screen.getByLabelText("天空颜色 HEX"), "#123456");
-  await user.clear(screen.getByLabelText("全景球水平旋转"));
-  await user.type(screen.getByLabelText("全景球水平旋转"), "30");
-  await user.clear(screen.getByLabelText("全景球半径"));
-  await user.type(screen.getByLabelText("全景球半径"), "90");
+  await user.clear(screen.getByLabelText("全景旋转"));
+  await user.type(screen.getByLabelText("全景旋转"), "30");
+  await user.clear(screen.getByLabelText("全景半径"));
+  await user.type(screen.getByLabelText("全景半径"), "90");
+
+  await user.click(screen.getByRole("button", { name: "其他" }));
+
+  expect(screen.getByLabelText("显示网格")).toBeChecked();
+
   await user.click(screen.getByLabelText("角色标签"));
-  await user.click(screen.getByLabelText("网格吸附"));
+  await user.click(screen.getByLabelText("显示网格"));
+
+  await user.click(screen.getByRole("button", { name: "地面" }));
+
   await user.clear(screen.getByLabelText("地面透明度"));
   await user.type(screen.getByLabelText("地面透明度"), "0.65");
   await user.clear(screen.getByLabelText("地面高度"));
@@ -72,32 +124,18 @@ it("updates scene transform, panorama, and ground controls", async () => {
   expect(scene.panoramaYaw).toBe(30);
   expect(scene.panoramaRadius).toBe(90);
   expect(scene.showLabels).toBe(false);
-  expect(scene.snapToGrid).toBe(true);
+  expect(scene.snapToGrid).toBe(false);
   expect(scene.groundOpacity).toBe(0.65);
   expect(scene.groundHeight).toBe(1.2);
 });
 
-it("renders a connected panorama as a compact thumbnail card with the file name overlay", () => {
-  const initialState = createInitialDirectorState();
-  useDirectorStore.setState({
-    ...useDirectorStore.getState(),
-    ...initialState,
-    project: {
-      ...initialState.project,
-      assets: [
-        {
-          id: "asset_panorama_1",
-          kind: "panorama",
-          sourceType: "image",
-          fileName: "studio-panorama.jpg",
-          url: "data:image/jpeg;base64,panorama-preview",
-        },
-      ],
-      panoramaAssetId: "asset_panorama_1",
-    },
-  });
+it("renders a connected panorama as a compact thumbnail card with the file name overlay", async () => {
+  const user = userEvent.setup();
+  connectPanorama();
 
   render(<ScenePanel />);
+
+  await user.click(screen.getByRole("button", { name: "全景" }));
 
   expect(screen.queryByText("已连接全景图: studio-panorama.jpg")).not.toBeInTheDocument();
   expect(screen.queryByText("全景图预览")).not.toBeInTheDocument();
@@ -109,35 +147,16 @@ it("renders a connected panorama as a compact thumbnail card with the file name 
   expect(thumbnailCard).toHaveClass("panorama-thumbnail-card");
   expect(screen.getByText("studio-panorama.jpg")).toHaveClass("panorama-thumbnail-name");
   expect(thumbnailImage).toHaveClass("panorama-thumbnail-image");
-  expect(thumbnailImage).toHaveAttribute(
-    "src",
-    "data:image/jpeg;base64,panorama-preview"
-  );
+  expect(thumbnailImage).toHaveAttribute("src", "data:image/jpeg;base64,panorama-preview");
 });
 
 it("removes the connected panorama when the delete icon is clicked", async () => {
   const user = userEvent.setup();
-  const initialState = createInitialDirectorState();
-  useDirectorStore.setState({
-    ...useDirectorStore.getState(),
-    ...initialState,
-    project: {
-      ...initialState.project,
-      assets: [
-        {
-          id: "asset_panorama_1",
-          kind: "panorama",
-          sourceType: "image",
-          fileName: "studio-panorama.jpg",
-          url: "data:image/jpeg;base64,panorama-preview",
-        },
-      ],
-      panoramaAssetId: "asset_panorama_1",
-    },
-  });
+  connectPanorama();
 
   render(<ScenePanel />);
 
+  await user.click(screen.getByRole("button", { name: "全景" }));
   await user.click(screen.getByRole("button", { name: "删除全景图" }));
 
   expect(useDirectorStore.getState().project.panoramaAssetId).toBeNull();
@@ -145,8 +164,11 @@ it("removes the connected panorama when the delete icon is clicked", async () =>
   expect(screen.getByLabelText("全景图连接状态")).toBeInTheDocument();
 });
 
-it("renders the disconnected panorama state as a fixed-size dark card", () => {
+it("renders the disconnected panorama state as a fixed-size dark card", async () => {
+  const user = userEvent.setup();
   render(<ScenePanel />);
+
+  await user.click(screen.getByRole("button", { name: "全景" }));
 
   const panoramaStatus = screen.getByLabelText("全景图连接状态");
 
@@ -155,37 +177,81 @@ it("renders the disconnected panorama state as a fixed-size dark card", () => {
   expect(panoramaStatus).toHaveTextContent("未连接全景图");
 });
 
+it("opens the panorama file picker when the panorama card is clicked", async () => {
+  const user = userEvent.setup();
+  render(<ScenePanel />);
+
+  await user.click(screen.getByRole("button", { name: "全景" }));
+
+  const uploadInput = screen.getByLabelText("上传全景图") as HTMLInputElement;
+  const clickSpy = vi.spyOn(uploadInput, "click");
+
+  await user.click(screen.getByLabelText("全景图连接状态"));
+
+  expect(clickSpy).toHaveBeenCalledTimes(1);
+});
+
+it("switches the panorama between the orb and a camera-locked backdrop", async () => {
+  const user = userEvent.setup();
+  render(<ScenePanel />);
+
+  await user.click(screen.getByRole("button", { name: "全景" }));
+
+  expect(screen.getByRole("button", { name: "全景图" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByLabelText("全景旋转")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "背景图" }));
+
+  expect(useDirectorStore.getState().project.scene.panoramaProjectionMode).toBe("backdrop");
+  expect(screen.getByLabelText("背景图缩放")).toBeInTheDocument();
+  expect(screen.getByLabelText("背景图位置 X")).toBeInTheDocument();
+  expect(screen.queryByLabelText("全景旋转")).not.toBeInTheDocument();
+
+  await user.clear(screen.getByLabelText("背景图缩放"));
+  await user.type(screen.getByLabelText("背景图缩放"), "1.5");
+
+  expect(useDirectorStore.getState().project.scene.backdropScale).toBe(1.5);
+
+  await user.clear(screen.getByLabelText("背景图位置 X"));
+  await user.type(screen.getByLabelText("背景图位置 X"), "3");
+
+  expect(useDirectorStore.getState().project.scene.backdropOffset?.[0]).toBe(3);
+});
+
 it("updates panorama radius from both slider and numeric input", async () => {
   const user = userEvent.setup();
   render(<ScenePanel />);
 
-  await user.clear(screen.getByLabelText("全景球半径"));
-  await user.type(screen.getByLabelText("全景球半径"), "150");
+  await user.click(screen.getByRole("button", { name: "全景" }));
+  await user.clear(screen.getByLabelText("全景半径"));
+  await user.type(screen.getByLabelText("全景半径"), "150");
 
   expect(useDirectorStore.getState().project.scene.panoramaRadius).toBe(150);
-  expect(screen.getByLabelText("全景球半径滑杆")).toHaveValue("150");
+  expect(screen.getByLabelText("全景半径滑杆")).toHaveValue("150");
 
-  fireEvent.change(screen.getByLabelText("全景球半径滑杆"), { target: { value: "149" } });
+  fireEvent.change(screen.getByLabelText("全景半径滑杆"), { target: { value: "149" } });
 
   expect(useDirectorStore.getState().project.scene.panoramaRadius).toBe(149);
-  expect(screen.getByLabelText("全景球半径")).toHaveValue(149);
+  expect(screen.getByLabelText("全景半径")).toHaveValue(149);
 });
 
 it("updates panorama yaw and ground height from both sliders and numeric inputs", async () => {
   const user = userEvent.setup();
   render(<ScenePanel />);
 
-  await user.clear(screen.getByLabelText("全景球水平旋转"));
-  await user.type(screen.getByLabelText("全景球水平旋转"), "45");
+  await user.click(screen.getByRole("button", { name: "全景" }));
+  await user.clear(screen.getByLabelText("全景旋转"));
+  await user.type(screen.getByLabelText("全景旋转"), "45");
 
   expect(useDirectorStore.getState().project.scene.panoramaYaw).toBe(45);
-  expect(screen.getByLabelText("全景球水平旋转滑杆")).toHaveValue("45");
+  expect(screen.getByLabelText("全景旋转滑杆")).toHaveValue("45");
 
-  fireEvent.change(screen.getByLabelText("全景球水平旋转滑杆"), { target: { value: "-30" } });
+  fireEvent.change(screen.getByLabelText("全景旋转滑杆"), { target: { value: "-30" } });
 
   expect(useDirectorStore.getState().project.scene.panoramaYaw).toBe(-30);
-  expect(screen.getByLabelText("全景球水平旋转")).toHaveValue(-30);
+  expect(screen.getByLabelText("全景旋转")).toHaveValue(-30);
 
+  await user.click(screen.getByRole("button", { name: "地面" }));
   await user.clear(screen.getByLabelText("地面高度"));
   await user.type(screen.getByLabelText("地面高度"), "1.2");
 
@@ -198,15 +264,19 @@ it("updates panorama yaw and ground height from both sliders and numeric inputs"
   expect(screen.getByLabelText("地面高度")).toHaveValue(-1.5);
 });
 
-it("hides ground opacity and height controls when ground is disabled", async () => {
+it("keeps the ground switch on the ground tab and hides its fields while ground is off", async () => {
   const user = userEvent.setup();
   render(<ScenePanel />);
 
+  await user.click(screen.getByRole("button", { name: "地面" }));
+
+  expect(screen.getByLabelText("地面")).toBeChecked();
   expect(screen.getByLabelText("地面透明度")).toBeInTheDocument();
   expect(screen.getByLabelText("地面高度")).toBeInTheDocument();
 
   await user.click(screen.getByLabelText("地面"));
 
+  expect(useDirectorStore.getState().project.scene.showGround).toBe(false);
   expect(screen.queryByLabelText("地面透明度")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("地面高度")).not.toBeInTheDocument();
 });
@@ -229,85 +299,17 @@ it("updates scene scale from both slider and numeric input", async () => {
   expect(screen.getByLabelText("场景缩放")).toHaveValue(1.8);
 });
 
-it("keeps the axis drag affordance visible while dragging values", () => {
-  render(<ScenePanel />);
+it("exposes scene translate and rotate as per-axis slider rows", () => {
+  const { container } = render(<ScenePanel />);
 
-  const xDragHandle = screen.getByLabelText("场景平移 X 拖动调整");
-  const axisInput = xDragHandle.closest(".inspector-axis-input");
+  (["X", "Y", "Z"] as const).forEach((axis) => {
+    expect(screen.getByLabelText(`场景平移 ${axis} 滑杆`)).toBeInTheDocument();
+    expect(screen.getByLabelText(`场景旋转 ${axis} 滑杆`)).toBeInTheDocument();
+  });
 
-  expect(xDragHandle).not.toHaveClass("is-dragging");
-  expect(axisInput).not.toHaveClass("is-dragging");
-
-  fireEvent.mouseDown(xDragHandle, { button: 0, clientX: 100 });
-
-  expect(xDragHandle).not.toHaveClass("is-dragging");
-  expect(axisInput).toHaveClass("is-dragging");
-
-  fireEvent.mouseMove(window, { clientX: 120 });
-
-  expect(useDirectorStore.getState().project.scene.position[0]).toBe(0.2);
-
-  fireEvent.mouseUp(window);
-
-  expect(xDragHandle).not.toHaveClass("is-dragging");
-  expect(axisInput).not.toHaveClass("is-dragging");
-});
-
-it("keeps the XYZ drag handle width stable while dragging", () => {
-  render(<ScenePanel />);
-
-  const xDragHandle = screen.getByLabelText("场景平移 X 拖动调整");
-  const widthBeforeDrag = getComputedStyle(xDragHandle).width;
-
-  fireEvent.mouseDown(xDragHandle, { button: 0, clientX: 100 });
-  const widthDuringDrag = getComputedStyle(xDragHandle).width;
-  fireEvent.mouseMove(window, { clientX: 120 });
-  fireEvent.mouseUp(window);
-
-  expect(widthDuringDrag).toBe(widthBeforeDrag);
-});
-
-it("keeps the XYZ drag handle visuals stable while dragging", () => {
-  render(<ScenePanel />);
-
-  const xDragHandle = screen.getByLabelText("场景平移 X 拖动调整");
-  const backgroundBeforeDrag = getComputedStyle(xDragHandle).backgroundColor;
-  const colorBeforeDrag = getComputedStyle(xDragHandle).color;
-
-  fireEvent.mouseDown(xDragHandle, { button: 0, clientX: 100 });
-
-  const backgroundDuringDrag = getComputedStyle(xDragHandle).backgroundColor;
-  const colorDuringDrag = getComputedStyle(xDragHandle).color;
-
-  fireEvent.mouseUp(window);
-
-  expect(backgroundDuringDrag).toBe(backgroundBeforeDrag);
-  expect(colorDuringDrag).toBe(colorBeforeDrag);
-});
-
-it("keeps the XYZ drag handle focused instead of moving focus into the number input", () => {
-  render(<ScenePanel />);
-
-  const xDragHandle = screen.getByLabelText("场景平移 X 拖动调整");
-  const xInput = screen.getByLabelText("场景平移 X");
-
-  fireEvent.mouseDown(xDragHandle, { button: 0, clientX: 100 });
-
-  expect(document.activeElement).toBe(xDragHandle);
-  expect(document.activeElement).not.toBe(xInput);
-
-  fireEvent.mouseUp(window);
-});
-
-it("renders the XYZ drag handle inside the 80px axis input shell", () => {
-  render(<ScenePanel />);
-
-  const xDragHandle = screen.getByLabelText("场景平移 X 拖动调整");
-  const axisInput = xDragHandle.closest(".inspector-axis-input");
-  const valueInput = screen.getByLabelText("场景平移 X");
-
-  expect(axisInput).toBeInTheDocument();
-  expect(axisInput).toHaveClass("inspector-axis-input");
-  expect(valueInput.closest(".inspector-axis-input")).toBe(axisInput);
-  expect(getComputedStyle(axisInput as HTMLElement).backgroundColor).toBe("rgb(11, 11, 12)");
+  expect(screen.getByText("场景平移")).toBeInTheDocument();
+  expect(screen.getByText("场景旋转")).toBeInTheDocument();
+  expect(container.querySelectorAll(".inspector-range-axis")).toHaveLength(6);
+  expect(container.querySelectorAll(".inspector-axis-group")).toHaveLength(2);
+  expect(screen.getByLabelText("场景平移 X").closest(".inspector-range-field")).toBeInTheDocument();
 });

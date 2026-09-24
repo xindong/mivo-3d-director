@@ -81,6 +81,7 @@ beforeEach(() => {
   useDirectorStore.setState({
     ...useDirectorStore.getState(),
     ...createInitialDirectorState(),
+    cameraInspectorTab: "properties",
     selectedObjectId: "cam_object_1",
   });
 });
@@ -93,7 +94,7 @@ afterEach(() => {
 it("renders the approved camera panel fields", () => {
   render(<CameraPanel />);
 
-  expect(screen.getByText("摄像机")).toBeInTheDocument();
+  expect(screen.getByLabelText("摄像机右侧属性面板")).toBeInTheDocument();
   expect(screen.getByLabelText("机位名称")).toBeInTheDocument();
   expect(screen.getByLabelText("切换机位")).toBeInTheDocument();
   expect(screen.getByLabelText("机位位置 X")).toBeInTheDocument();
@@ -114,11 +115,11 @@ it("uses the provided right inspector layout for camera properties", () => {
   expect(screen.getByLabelText("切换机位")).toHaveClass("inspector-dropdown-trigger");
   expect(screen.getByLabelText("注视目标模式")).toHaveClass("inspector-dropdown-trigger");
 
-  const positionY = screen.getByLabelText("机位位置 Y").closest(".inspector-axis-input");
+  const positionY = screen.getByLabelText("机位位置 Y").closest(".inspector-range-field");
   const fovField = screen.getByLabelText("机位 FOV").closest(".inspector-range-row");
 
   expect(positionY).toBeInTheDocument();
-  expect(within(positionY as HTMLElement).getByText("Y")).toHaveClass("inspector-axis-prefix");
+  expect(within(positionY as HTMLElement).getByText("Y")).toHaveClass("inspector-range-axis");
   expect(fovField).toBeInTheDocument();
 });
 
@@ -237,47 +238,12 @@ it("updates camera position and target coordinates across all axes", async () =>
   expect(camera.target).toEqual([0, 1.8, 2]);
 });
 
-it("captures the current camera preview from the properties tab and shows it in the screenshots overview", async () => {
-  const user = userEvent.setup();
-  setViewportCaptureHandler(async () => [
-    {
-      label: "当前机位",
-      dataUrl: "data:image/png;base64,camera-preview",
-      meta: {
-        mode: "camera",
-        cameraId: "cam_1",
-        fov: 50,
-        position: [0, 2.2, 9],
-        target: [0, 1.2, 0],
-      },
-    },
-  ]);
-
+it("keeps the capture workflow on the screenshots tab only", () => {
   render(<CameraPanel />);
 
-  await user.click(screen.getByRole("button", { name: "当前机位截图" }));
-  await user.click(screen.getByRole("button", { name: "摄像机截图" }));
-
-  expect(useDirectorStore.getState().project.cameras[0]?.lastCaptureUrl).toBe("data:image/png;base64,camera-preview");
-  expect(useDirectorStore.getState().project.cameras[0]?.captures).toEqual([
-    {
-      id: "cam_1-capture-01",
-      index: 1,
-      name: "机位01-截图01",
-      dataUrl: "data:image/png;base64,camera-preview",
-    },
-  ]);
-  expect(await screen.findByAltText("机位01-截图01 缩略图")).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "机位01截图" })).toBeInTheDocument();
-  expect(screen.getByText("机位01-截图01")).toBeInTheDocument();
-});
-
-it("keeps the camera capture section visible at the bottom of the properties tab", () => {
-  render(<CameraPanel />);
-
-  expect(screen.getByRole("heading", { name: "相机截图" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "当前机位截图" })).toHaveClass("camera-capture-current-button");
-  expect(screen.getByTestId("camera-current-capture-icon")).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "相机截图" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "当前机位截图" })).not.toBeInTheDocument();
+  expect(screen.queryByTestId("camera-current-capture-icon")).not.toBeInTheDocument();
 });
 
 it("renders the thumbnail actions in a bottom bar and opens the project-style viewer toolbar", async () => {
@@ -285,6 +251,8 @@ it("renders the thumbnail actions in a bottom bar and opens the project-style vi
   seedCameraCapture();
 
   render(<CameraPanel />);
+
+  await user.click(screen.getByRole("button", { name: "摄像机截图" }));
 
   expect(screen.getByRole("group", { name: "机位01-截图01 缩略图操作" })).toHaveClass("camera-capture-actions");
 
@@ -301,121 +269,19 @@ it("renders the thumbnail actions in a bottom bar and opens the project-style vi
   expect(within(toolbar).getByRole("button", { name: "关闭相机截图查看器" })).toBeInTheDocument();
 });
 
-it("sends a single camera capture to the host canvas when the thumbnail action is clicked", async () => {
+it("downloads a single camera capture from the thumbnail action", async () => {
   const user = userEvent.setup();
-  const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
+  const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
   seedCameraCapture();
 
   render(<CameraPanel />);
 
-  await user.click(screen.getByRole("button", { name: "发送到画布 机位01-截图01" }));
-
-  expect(postMessage).toHaveBeenCalledWith(
-    {
-      type: "storyai:director-desk-captures-sent",
-      payload: {
-        captures: [
-          {
-            dataUrl: "data:image/png;base64,camera-preview",
-            fileName: "机位01-截图01.png",
-          },
-        ],
-      },
-    },
-    window.location.origin
-  );
-});
-
-it("shows all camera screenshots grouped by camera in the screenshots tab", async () => {
-  const user = userEvent.setup();
-  seedGroupedCameraCaptures();
-
-  render(<CameraPanel />);
-
   await user.click(screen.getByRole("button", { name: "摄像机截图" }));
 
-  const firstGroup = screen.getByRole("region", { name: "机位01截图" });
-  const secondGroup = screen.getByRole("region", { name: "机位02截图" });
+  await user.click(screen.getByRole("button", { name: "下载截图 机位01-截图01" }));
 
-  expect(screen.queryByRole("heading", { name: "相机截图" })).not.toBeInTheDocument();
-  expect(within(firstGroup).getByRole("heading", { name: "机位01截图" })).toBeInTheDocument();
-  expect(within(firstGroup).getByText("机位01-截图01")).toBeInTheDocument();
-  expect(within(firstGroup).getByText("机位01-截图02")).toBeInTheDocument();
-  expect(within(secondGroup).getByRole("heading", { name: "机位02截图" })).toBeInTheDocument();
-  expect(within(secondGroup).getByText("机位02-截图01")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "清空全部" })).toHaveClass("camera-capture-clear-all");
-  expect(screen.getByRole("button", { name: "发送到画布" })).toHaveClass(
-    "camera-capture-send-all",
-    "viewport-toolbar-crowd-confirm"
-  );
-  expect(screen.getByRole("button", { name: "发送到画布" })).not.toHaveClass("is-hover-state");
-  expect(screen.getByTestId("camera-capture-clear-icon")).toBeInTheDocument();
-  expect(screen.getByTestId("camera-capture-send-icon")).toBeInTheDocument();
-
-  const panel = screen.getByLabelText("摄像机右侧属性面板");
-  const content = panel.querySelector(".right-inspector-content");
-  const footer = panel.querySelector(".camera-capture-overview-footer");
-
-  expect(footer).toBeInTheDocument();
-  expect(content).toBeInTheDocument();
-  expect(content).not.toContainElement(footer as HTMLElement);
-});
-
-it("sends all visible camera screenshots to the host canvas from the overview footer", async () => {
-  const user = userEvent.setup();
-  const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
-  seedGroupedCameraCaptures();
-
-  render(<CameraPanel />);
-
-  await user.click(screen.getByRole("button", { name: "摄像机截图" }));
-  await user.click(screen.getByRole("button", { name: "发送到画布" }));
-
-  expect(postMessage).toHaveBeenCalledWith(
-    {
-      type: "storyai:director-desk-captures-sent",
-      payload: {
-        captures: [
-          {
-            dataUrl: "data:image/png;base64,camera-1-a",
-            fileName: "机位01-截图01.png",
-          },
-          {
-            dataUrl: "data:image/png;base64,camera-1-b",
-            fileName: "机位01-截图02.png",
-          },
-          {
-            dataUrl: "data:image/png;base64,camera-2-a",
-            fileName: "机位02-截图01.png",
-          },
-        ],
-      },
-    },
-    window.location.origin
-  );
-});
-
-it("clears every camera screenshot from the screenshots tab and shows the empty state", async () => {
-  const user = userEvent.setup();
-  seedGroupedCameraCaptures();
-
-  render(<CameraPanel />);
-
-  await user.click(screen.getByRole("button", { name: "摄像机截图" }));
-  await user.click(screen.getByRole("button", { name: "清空全部" }));
-
-  expect(screen.queryByText("机位01-截图01")).not.toBeInTheDocument();
-  const emptyState = screen.getByRole("status", { name: "暂无摄像机截图" });
-  expect(emptyState).toHaveClass("camera-capture-empty", "object-search-empty-state");
-  expect(screen.getByTestId("camera-capture-empty-icon")).toHaveClass("object-search-empty-icon");
-  expect(screen.getByTestId("camera-capture-empty-icon").querySelector(".lucide-images")).toBeInTheDocument();
-  expect(screen.getByTestId("camera-capture-empty-icon").querySelector(".lucide-search")).not.toBeInTheDocument();
-  expect(screen.getByText("暂无摄像机截图")).toBeInTheDocument();
-  expect(useDirectorStore.getState().project.cameras.map((camera) => camera.captures ?? [])).toEqual([[], []]);
-  expect(useDirectorStore.getState().project.cameras.map((camera) => camera.lastCaptureUrl ?? null)).toEqual([
-    null,
-    null,
-  ]);
+  expect(anchorClick).toHaveBeenCalledTimes(1);
+  anchorClick.mockRestore();
 });
 
 it("closes the capture viewer when clicking outside the image", async () => {
@@ -424,10 +290,12 @@ it("closes the capture viewer when clicking outside the image", async () => {
 
   const { container } = render(<CameraPanel />);
 
+  await user.click(screen.getByRole("button", { name: "摄像机截图" }));
+
   await user.click(screen.getByLabelText("查看截图 机位01-截图01"));
 
   const previewImage = screen.getByAltText("机位01-截图01 查看大图");
-  const viewerStage = container.querySelector(".camera-capture-viewer-stage");
+  const viewerStage = document.querySelector(".camera-capture-viewer-stage");
 
   expect(viewerStage).toBeInTheDocument();
 
@@ -444,6 +312,8 @@ it("zooms the capture preview through the viewer toolbar controls with the canva
 
   render(<CameraPanel />);
 
+  await user.click(screen.getByRole("button", { name: "摄像机截图" }));
+
   await user.click(screen.getByLabelText("查看截图 机位01-截图01"));
   await user.click(screen.getByRole("button", { name: "放大图片" }));
 
@@ -457,6 +327,8 @@ it("supports wheel zooming and dragging like the canvas image preview", async ()
   seedCameraCapture();
 
   render(<CameraPanel />);
+
+  await user.click(screen.getByRole("button", { name: "摄像机截图" }));
 
   await user.click(screen.getByLabelText("查看截图 机位01-截图01"));
 
@@ -477,6 +349,8 @@ it("deletes a camera capture from the screenshot grid", async () => {
   seedCameraCapture();
 
   render(<CameraPanel />);
+
+  await user.click(screen.getByRole("button", { name: "摄像机截图" }));
 
   await user.click(screen.getByLabelText("删除截图 机位01-截图01"));
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
-import { Box, Camera, ChevronDown, ChevronRight, Eye, EyeOff, Lock, Search, Unlock, User, Users } from "lucide-react";
+import { Box, Camera, ChevronDown, ChevronRight, Eye, EyeOff, Lock, Search, Trash2, Unlock, User, Users } from "lucide-react";
 import type { DirectorObject, DirectorObjectKind } from "../schema/directorProject";
 import { useDirectorStore } from "../store/directorStore";
 
@@ -55,7 +55,22 @@ export function ObjectTreePanel() {
   const [query, setQuery] = useState("");
   const [expandedCrowdIds, setExpandedCrowdIds] = useState<string[]>([]);
   const assets = useDirectorStore((state) => state.project.assets);
-  const objects = useDirectorStore((state) => state.project.objects);
+  // The tree only renders names/visibility/flags, so transform-only edits (dragging an
+  // object every frame) must not re-render the whole list.
+  const objectsSignature = useDirectorStore((state) =>
+    state.project.objects
+      .map(
+        (item) =>
+          `${item.id}\u0000${item.name}\u0000${item.kind}\u0000${item.visible ? 1 : 0}${item.locked ? 1 : 0}\u0000${
+            item.crowdId ?? ""
+          }\u0000${item.crowdLabel ?? ""}\u0000${item.assetRefId ?? ""}`
+      )
+      .join("|")
+  );
+  const objects = useMemo(
+    () => (objectsSignature ? useDirectorStore.getState().project.objects : []),
+    [objectsSignature]
+  );
   const selectedObjectId = useDirectorStore((state) => state.selectedObjectId);
   const selectedObjectIds = useDirectorStore((state) => state.selectedObjectIds);
   const selectedCrowdId = useDirectorStore((state) => state.selectedCrowdId);
@@ -283,9 +298,7 @@ export function ObjectTreePanel() {
 
   return (
     <section className="panel-card object-tree-panel">
-      <h2 className="visually-hidden">场景对象</h2>
       <label className="object-search-field">
-        <Search aria-hidden="true" size={16} strokeWidth={1.8} />
         <input
           className="ui-field"
           aria-label="搜索场景内容"
@@ -380,6 +393,18 @@ export function ObjectTreePanel() {
                               ) : (
                                 <Unlock aria-hidden="true" size={15} strokeWidth={1.8} />
                               )}
+                            </button>
+                            <button
+                              className="object-flag-button object-icon-flag-button"
+                              type="button"
+                              aria-label={`删除 ${item.name}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                selectObject(item.id);
+                                deleteSelectedObject();
+                              }}
+                            >
+                              <Trash2 aria-hidden="true" size={15} strokeWidth={1.8} />
                             </button>
                           </>
                         ) : null}

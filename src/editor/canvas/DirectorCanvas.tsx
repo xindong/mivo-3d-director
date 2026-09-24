@@ -1,4 +1,5 @@
 import { GizmoHelper, GizmoViewport, Grid, OrbitControls, PerspectiveCamera } from "@react-three/drei";
+import { RotateCcw } from "lucide-react";
 import { Canvas, useThree } from "@react-three/fiber";
 import {
   Suspense,
@@ -38,6 +39,13 @@ const GIZMO_AXIS_SCREEN_RADIUS = 25;
 const GIZMO_AXIS_HIT_SIZE = 15;
 const LEFT_PANEL_WIDTH = 220;
 const RIGHT_PANEL_WIDTH = 300;
+const SIDEBAR_EDGE_INSET = 24;
+const DEFAULT_EXPANDED_VIEWPORT_SAFE_AREA: ViewportSafeAreaInsets = {
+  left: LEFT_PANEL_WIDTH + SIDEBAR_EDGE_INSET,
+  right: RIGHT_PANEL_WIDTH + SIDEBAR_EDGE_INSET,
+  top: 0,
+  bottom: 0,
+};
 const GIZMO_EDGE_PADDING = 20;
 const HIDE_FROM_VIEWPORT_CAPTURE_KEY = "hideFromViewportCapture";
 const CAPTURE_LABEL_FONT_SIZE = 12;
@@ -65,8 +73,8 @@ type ViewportCaptureLabel = {
 };
 type ViewportCaptureFrameRect = NonNullable<ReturnType<typeof getViewportAspectFrameRect>>;
 
-export function shouldRenderViewportGrid(hasPanorama: boolean, snapToGrid: boolean) {
-  return true;
+export function shouldRenderViewportGrid(_hasPanorama: boolean, snapToGrid: boolean) {
+  return snapToGrid;
 }
 
 export function getViewportSnapshotFromGizmoDirection(
@@ -603,14 +611,57 @@ export function DirectorCanvas() {
   const viewportAspectRatio = useDirectorStore((state) => state.viewportAspectRatio);
   const viewportRuleOfThirdsEnabled = useDirectorStore((state) => state.viewportRuleOfThirdsEnabled);
   const viewportPanelsCollapsed = useDirectorStore((state) => state.viewportPanelsCollapsed);
+  const [expandedViewportSafeAreaInsets, setExpandedViewportSafeAreaInsets] = useState(
+    DEFAULT_EXPANDED_VIEWPORT_SAFE_AREA
+  );
   const setViewMode = useDirectorStore((state) => state.setViewMode);
   const setViewportRuleOfThirdsEnabled = useDirectorStore((state) => state.setViewportRuleOfThirdsEnabled);
   const visibleViewportSnapshot =
     viewMode === "camera" && activeCameraView ? activeCameraView : directorViewSnapshot;
   const viewportSafeAreaInsets: ViewportSafeAreaInsets = viewportPanelsCollapsed
     ? { left: 0, right: 0, top: 0, bottom: 0 }
-    : { left: LEFT_PANEL_WIDTH, right: RIGHT_PANEL_WIDTH, top: 0, bottom: 0 };
-  const gizmoRightOffset = viewportPanelsCollapsed ? GIZMO_EDGE_PADDING : RIGHT_PANEL_WIDTH + GIZMO_EDGE_PADDING;
+    : expandedViewportSafeAreaInsets;
+  const gizmoRightOffset = viewportPanelsCollapsed
+    ? GIZMO_EDGE_PADDING
+    : expandedViewportSafeAreaInsets.right + GIZMO_EDGE_PADDING;
+
+  useLayoutEffect(() => {
+    if (viewportPanelsCollapsed) return;
+
+    const viewportElement = document.querySelector<HTMLElement>(".director-shell-fullbleed .viewport-column");
+    const leftSidebar = document.querySelector<HTMLElement>(".director-shell-fullbleed .left-sidebar");
+    const rightSidebar = document.querySelector<HTMLElement>(".director-shell-fullbleed .right-sidebar");
+    if (!viewportElement || !leftSidebar || !rightSidebar) return;
+
+    const updateInsets = () => {
+      const viewportBounds = viewportElement.getBoundingClientRect();
+      const leftBounds = leftSidebar.getBoundingClientRect();
+      const rightBounds = rightSidebar.getBoundingClientRect();
+      const nextInsets = {
+        left: Math.max(0, leftBounds.right - viewportBounds.left),
+        right: Math.max(0, viewportBounds.right - rightBounds.left),
+        top: 0,
+        bottom: 0,
+      };
+
+      setExpandedViewportSafeAreaInsets((currentInsets) =>
+        currentInsets.left === nextInsets.left && currentInsets.right === nextInsets.right ? currentInsets : nextInsets
+      );
+    };
+
+    updateInsets();
+
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateInsets);
+    resizeObserver?.observe(viewportElement);
+    resizeObserver?.observe(leftSidebar);
+    resizeObserver?.observe(rightSidebar);
+    window.addEventListener("resize", updateInsets);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateInsets);
+    };
+  }, [viewportPanelsCollapsed]);
 
   useLayoutEffect(() => {
     const element = toolbarRef.current;
@@ -651,6 +702,15 @@ export function DirectorCanvas() {
     );
   }
 
+  function resetViewportView() {
+    if (viewMode !== "director") {
+      setViewMode("director");
+    }
+
+    viewportCameraSnapshotRef.current = DEFAULT_DIRECTOR_VIEW_SNAPSHOT;
+    setDirectorViewSnapshot(DEFAULT_DIRECTOR_VIEW_SNAPSHOT);
+  }
+
   function updateViewportGizmoSnapshot(snapshot: CameraShotSnapshot) {
     if (viewMode !== "director") {
       setViewMode("director");
@@ -681,19 +741,23 @@ export function DirectorCanvas() {
         >
           <ViewportBackground
             backgroundColor={sceneSettings.backgroundColor}
+            backdropOffset={sceneSettings.backdropOffset ?? [0, 0]}
+            backdropScale={sceneSettings.backdropScale ?? 1}
             panoramaAsset={panoramaAsset}
             panoramaRadius={sceneSettings.panoramaRadius}
             panoramaYaw={sceneSettings.panoramaYaw}
+            projectionMode={sceneSettings.panoramaProjectionMode}
           />
           <ambientLight intensity={1.15} />
           <directionalLight intensity={1.2} position={[8, 10, 6]} />
           {showViewportGrid ? (
             <Grid
+              cellColor="#4E4E4E"
               cellThickness={0}
               fadeDistance={80}
               infiniteGrid
               position={[0, sceneSettings.groundHeight + VIEWPORT_GRID_ELEVATION, 0]}
-              sectionColor="#2A4065"
+              sectionColor="#4E4E4E"
               userData={{ [HIDE_FROM_VIEWPORT_CAPTURE_KEY]: true }}
             />
           ) : null}
@@ -750,6 +814,17 @@ export function DirectorCanvas() {
         rightOffset={gizmoRightOffset}
         snapshot={visibleViewportSnapshot}
       />
+      <div className="viewport-view-reset" style={{ right: `${gizmoRightOffset}px` }}>
+        <button
+          aria-label="重置视角"
+          className="viewport-view-reset-button"
+          type="button"
+          onClick={resetViewportView}
+        >
+          <RotateCcw aria-hidden="true" size={13} strokeWidth={2} />
+          <span>重置视角</span>
+        </button>
+      </div>
       <ViewportToolbar getViewportCameraSnapshot={getViewportCameraSnapshot} toolbarContainerRef={toolbarRef} />
     </div>
   );

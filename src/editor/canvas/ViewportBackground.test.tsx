@@ -109,11 +109,11 @@ it("sets true 2:1 panorama textures as the 3D viewport equirectangular backgroun
   expect(loaderCalls[0]?.texture.colorSpace).toBe(SRGBColorSpace);
   expect(loaderCalls[0]?.texture.mapping).toBe(EquirectangularReflectionMapping);
   expect(mockScene.backgroundRotation.y).toBeCloseTo((120 * Math.PI) / 180);
-  expect(container.querySelector('mesh[name="panorama-backdrop-dome"]')).not.toBeInTheDocument();
+  expect(container.querySelector('mesh[name="panorama-backdrop-plane"]')).not.toBeInTheDocument();
   expect(container.querySelector("mesh[data-testid]")).not.toBeInTheDocument();
 });
 
-it("renders regular uploaded photos on a scalable sphere with seam-safe edge handling", async () => {
+it("renders regular uploaded photos on a camera-locked backdrop plane", async () => {
   const { container, rerender } = render(
     <ViewportBackground
       backgroundColor="#06080D"
@@ -127,31 +127,31 @@ it("renders regular uploaded photos on a scalable sphere with seam-safe edge han
     loaderCalls[0]?.onLoad(loaderCalls[0].texture);
   });
 
-  await waitFor(() => expect(container.querySelector('mesh[name="panorama-backdrop-dome"]')).toBeInTheDocument());
+  await waitFor(() => expect(container.querySelector('mesh[name="panorama-backdrop-plane"]')).toBeInTheDocument());
   expect(mockScene.background).toBeInstanceOf(Color);
   expect(mockScene.background).not.toBe(loaderCalls[0]?.texture);
   expect(loaderCalls[0]?.texture.mapping).not.toBe(EquirectangularReflectionMapping);
   expect(loaderCalls[0]?.texture.wrapS).toBe(ClampToEdgeWrapping);
   expect(loaderCalls[0]?.texture.wrapT).toBe(ClampToEdgeWrapping);
-  expect(loaderCalls[0]?.texture.repeat.x).toBe(-1);
-  expect(loaderCalls[0]?.texture.offset.x).toBe(1);
-  expect(useFrame).not.toHaveBeenCalled();
-  expect(container.querySelector("spheregeometry")).toHaveAttribute("args", "60,96,64");
-
-  const backdropMesh = container.querySelector('mesh[name="panorama-backdrop-dome"]');
-  expect(backdropMesh).not.toHaveAttribute("scale", "60,60,60");
+  expect(loaderCalls[0]?.texture.repeat.x).toBe(1);
+  expect(loaderCalls[0]?.texture.offset.x).toBe(0);
+  expect(container.querySelector('mesh[name="panorama-backdrop-plane"]')).not.toHaveAttribute("scale", "60,60,60");
+  expect(container.querySelector("planegeometry")).toHaveAttribute("args", "1,1");
 
   rerender(
     <ViewportBackground
       backgroundColor="#06080D"
+      backdropOffset={[2, -1]}
+      backdropScale={1.5}
       panoramaAsset={backdropAsset}
       panoramaRadius={150}
       panoramaYaw={30}
     />
   );
 
-  expect(container.querySelector("spheregeometry")).toHaveAttribute("args", "150,96,64");
+  expect(container.querySelector('mesh[name="panorama-backdrop-plane"]')).toBeInTheDocument();
 });
+
 
 it("shows a visible viewport message instead of silently blacking out when panorama loading fails", async () => {
   render(

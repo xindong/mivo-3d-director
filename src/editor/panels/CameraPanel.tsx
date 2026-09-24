@@ -1,16 +1,15 @@
-import { Camera, Download, Eye, Images, Send, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Camera, Download, Eye, Images, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   InspectorAxisGroup,
   InspectorPanel,
   InspectorRangeNumberField,
-  InspectorSection,
   InspectorSelectField,
   InspectorTextField,
 } from "./InspectorControls";
-import { requestViewportCapture } from "../io/captureBridge";
 import { downloadDataUrl } from "../io/screenshotExport";
-import { postDirectorDeskCapturesToHost } from "../io/hostBridge";
+import { requestViewportCapture } from "../io/captureBridge";
 import { getDirectorObjectFocusTarget, isCameraFocusableObject } from "../schema/cameraTarget";
 import type { DirectorCameraCapture } from "../schema/directorProject";
 import { useDirectorStore } from "../store/directorStore";
@@ -24,7 +23,9 @@ function replaceAxis(tuple: [number, number, number], axis: 0 | 1 | 2, value: nu
 }
 
 export function CameraPanel() {
-  const [activeTab, setActiveTab] = useState<"properties" | "captures">("properties");
+  const activeTab = useDirectorStore((state) => state.cameraInspectorTab);
+  const setActiveTab = useDirectorStore((state) => state.setCameraInspectorTab);
+  const [captureBusy, setCaptureBusy] = useState(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [hoveredCaptureId, setHoveredCaptureId] = useState<string | null>(null);
   const [viewerCapture, setViewerCapture] = useState<DirectorCameraCapture | null>(null);
@@ -43,12 +44,11 @@ export function CameraPanel() {
   const cameras = useDirectorStore((state) => state.project.cameras);
   const objects = useDirectorStore((state) => state.project.objects);
   const setActiveCamera = useDirectorStore((state) => state.setActiveCamera);
-  const addCameraCaptures = useDirectorStore((state) => state.addCameraCaptures);
   const updateCamera = useDirectorStore((state) => state.updateCamera);
+  const addCameraCaptures = useDirectorStore((state) => state.addCameraCaptures);
 
   if (!camera) return null;
   const currentCamera = camera;
-  const captures = useMemo(() => currentCamera.captures ?? [], [currentCamera.captures]);
   const cameraCaptureGroups = useMemo(
     () =>
       cameras.map((item) => ({
@@ -130,29 +130,11 @@ export function CameraPanel() {
     setViewerScale((currentScale) => clampViewerScale(Number(updater(currentScale).toFixed(2))));
   }, [clampViewerScale]);
 
-  const sendCaptureToCanvas = useCallback((capture: DirectorCameraCapture) => {
-    postDirectorDeskCapturesToHost([
-      {
-        dataUrl: capture.dataUrl,
-        fileName: `${capture.name}.png`,
-      },
-    ]);
-  }, []);
-
-  const sendAllCapturesToCanvas = useCallback(() => {
-    postDirectorDeskCapturesToHost(
-      cameraCaptureGroups.flatMap((group) =>
-        group.captures.map((capture) => ({
-          dataUrl: capture.dataUrl,
-          fileName: `${capture.name}.png`,
-        }))
-      )
-    );
-  }, [cameraCaptureGroups]);
-
   async function handleCameraCapture() {
+    setCaptureError(null);
+    setCaptureBusy(true);
+
     try {
-      setCaptureError(null);
       const results = await requestViewportCapture({
         preset: "current",
         source: "camera-panel",
@@ -164,6 +146,8 @@ export function CameraPanel() {
       }
     } catch (error) {
       setCaptureError(error instanceof Error ? error.message : "机位截图失败");
+    } finally {
+      setCaptureBusy(false);
     }
   }
 
@@ -291,15 +275,15 @@ export function CameraPanel() {
                     <Trash2 aria-hidden="true" size={14} strokeWidth={1.9} />
                   </button>
                   <button
-                    aria-label={`发送到画布 ${capture.name}`}
+                    aria-label={`下载截图 ${capture.name}`}
                     className="camera-capture-action"
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
-                      sendCaptureToCanvas(capture);
+                      downloadDataUrl(capture.dataUrl, `${capture.name}.png`);
                     }}
                   >
-                    <Send aria-hidden="true" size={14} strokeWidth={1.9} />
+                    <Download aria-hidden="true" size={14} strokeWidth={1.9} />
                   </button>
                   <button
                     aria-label={`查看截图 ${capture.name}`}
@@ -320,14 +304,6 @@ export function CameraPanel() {
         })}
       </div>
     );
-  }
-
-  function renderCurrentCameraCaptureGrid() {
-    if (captures.length === 0) {
-      return <div className="capture-list-placeholder">当前还没有机位截图，可先从当前机位生成一张预览。</div>;
-    }
-
-    return renderCaptureCards(captures);
   }
 
   function renderCaptureEmptyState() {
@@ -354,7 +330,6 @@ export function CameraPanel() {
                   aria-label={`${group.camera.name}截图`}
                   className="camera-capture-group"
                 >
-                  <h3>{group.camera.name}截图</h3>
                   {renderCaptureCards(group.captures)}
                 </section>
               ))
@@ -379,11 +354,12 @@ export function CameraPanel() {
         </button>
         <button
           className="camera-capture-send-all viewport-toolbar-crowd-confirm"
+          disabled={captureBusy}
           type="button"
-          onClick={sendAllCapturesToCanvas}
+          onClick={() => void handleCameraCapture()}
         >
-          <Send aria-hidden="true" data-testid="camera-capture-send-icon" size={14} strokeWidth={1.9} />
-          <span>发送到画布</span>
+          <Camera aria-hidden="true" data-testid="camera-capture-send-icon" size={14} strokeWidth={1.9} />
+          <span>{captureBusy ? "截图生成中…" : "相机截图"}</span>
         </button>
       </div>
     );
@@ -402,7 +378,7 @@ export function CameraPanel() {
       .filter(Boolean)
       .join(" ");
 
-    return (
+    const viewer = (
       <div
         aria-label="相机截图查看器"
         className="camera-capture-viewer"
@@ -462,6 +438,8 @@ export function CameraPanel() {
         </div>
       </div>
     );
+
+    return typeof document === "undefined" ? viewer : createPortal(viewer, document.body);
   }
 
   return (
@@ -582,22 +560,10 @@ export function CameraPanel() {
             value={currentCamera.fov}
             onValueChange={(value) => updateCamera(currentCamera.id, { fov: Number(value) })}
           />
-          <InspectorSection title="相机截图" className="camera-capture-section">
-            <button
-              className="camera-capture-current-button"
-              type="button"
-              onClick={() => void handleCameraCapture()}
-            >
-              <Camera aria-hidden="true" data-testid="camera-current-capture-icon" size={14} strokeWidth={1.9} />
-              <span>当前机位截图</span>
-            </button>
-            {captureError ? <p>{captureError}</p> : null}
-            {renderCurrentCameraCaptureGrid()}
-          </InspectorSection>
         </>
       ) : (
         <div className="camera-capture-tab">
-          {captureError ? <p>{captureError}</p> : null}
+          {captureError ? <p className="capture-status">{captureError}</p> : null}
           {renderAllCameraCaptures()}
         </div>
       )}

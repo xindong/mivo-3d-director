@@ -17,15 +17,13 @@ function expectTupleToBeCloseTo(
   });
 }
 
-it("keeps the viewport grid visible when there is no panorama background", () => {
-  expect(shouldRenderViewportGrid(false, false)).toBe(true);
+it("hides the viewport grid while snap to grid is off, panorama or not", () => {
+  expect(shouldRenderViewportGrid(false, false)).toBe(false);
+  expect(shouldRenderViewportGrid(true, false)).toBe(false);
 });
 
-it("keeps the viewport grid visible when a panorama background is active", () => {
-  expect(shouldRenderViewportGrid(true, false)).toBe(true);
-});
-
-it("keeps the viewport grid visible when snap to grid is enabled during a panorama background", () => {
+it("shows the viewport grid while snap to grid is on, panorama or not", () => {
+  expect(shouldRenderViewportGrid(false, true)).toBe(true);
   expect(shouldRenderViewportGrid(true, true)).toBe(true);
 });
 

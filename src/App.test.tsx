@@ -13,18 +13,22 @@ beforeEach(() => {
   useDirectorStore.setState({
     ...useDirectorStore.getState(),
     ...createInitialDirectorState(),
+    cameraInspectorTab: "properties",
   });
 });
 
-it("renders the director desk header and view mode switch", () => {
+it("renders the floating view mode switch and workspace controls", () => {
   const { container } = render(<App />);
 
-  expect(screen.getByText("3D导演台")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "导演视角" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "机位视角" })).toBeInTheDocument();
-  expect(container.querySelector(".top-bar-center .mode-toggle")).toBeInTheDocument();
+  expect(screen.getByRole("separator", { name: "调整左侧面板宽度" })).toBeInTheDocument();
+  expect(screen.getByRole("separator", { name: "调整右侧面板宽度" })).toBeInTheDocument();
+  expect(container.querySelector(".viewport-mode-control .mode-toggle")).toBeInTheDocument();
+  expect(container.querySelector(".top-bar")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("帮助")).not.toBeInTheDocument();
-  expect(screen.getByLabelText("关闭")).toBeInTheDocument();
+  expect(screen.queryByLabelText("关闭")).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "元素列表" })).not.toBeInTheDocument();
 });
 
 it("notifies the host canvas when the director desk app is ready", () => {
@@ -34,22 +38,6 @@ it("notifies the host canvas when the director desk app is ready", () => {
 
   expect(postMessage).toHaveBeenCalledWith(
     { type: "storyai:director-desk-ready" },
-    window.location.origin
-  );
-
-  postMessage.mockRestore();
-});
-
-it("notifies the host canvas when the director desk close button is clicked", async () => {
-  const user = userEvent.setup();
-  const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
-
-  render(<App />);
-
-  await user.click(screen.getByRole("button", { name: "关闭" }));
-
-  expect(postMessage).toHaveBeenCalledWith(
-    { type: "storyai:director-desk-close" },
     window.location.origin
   );
 
@@ -83,6 +71,8 @@ it("collapses both side panels from the fullscreen toolbar action", async () => 
   expect(container.querySelector(".director-shell-fullbleed.is-sidebars-collapsed")).toBeInTheDocument();
   expect(screen.getByLabelText("场景")).toHaveAttribute("aria-hidden", "true");
   expect(screen.getByLabelText("属性")).toHaveAttribute("aria-hidden", "true");
+  expect(screen.queryByRole("separator", { name: "调整左侧面板宽度" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("separator", { name: "调整右侧面板宽度" })).not.toBeInTheDocument();
 });
 
 it("switches from director mode to camera mode", async () => {

@@ -1,11 +1,18 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { Box3, Vector3 } from "three";
+import { Box3, Group, Vector3 } from "three";
 import { afterEach, beforeEach, vi } from "vitest";
 import { VIEWPORT_CAMERA_VISUAL_SCALE } from "../schema/cameraGeometry";
 import { createInitialDirectorState, useDirectorStore } from "../store/directorStore";
 import { getImportedModelNormalization, SceneRoot } from "./SceneRoot";
 
 const mockCharacterModelShouldSuspend = vi.hoisted(() => ({ current: false }));
+const mockLoadModelObject = vi.hoisted(() => vi.fn());
+const mockDisposeObject3D = vi.hoisted(() => vi.fn());
+
+vi.mock("mivo-model-viewer/core", () => ({
+  disposeObject3D: (object: unknown) => mockDisposeObject3D(object),
+  loadModelObject: (...args: unknown[]) => mockLoadModelObject(...args),
+}));
 
 vi.mock("@react-three/drei", async () => {
   const actual = await vi.importActual<typeof import("@react-three/drei")>("@react-three/drei");
@@ -156,6 +163,9 @@ vi.mock("../runtime/CharacterModel", async () => {
 beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
   mockCharacterModelShouldSuspend.current = false;
+  mockLoadModelObject.mockReset();
+  mockDisposeObject3D.mockReset();
+  mockLoadModelObject.mockResolvedValue({ object: new Group() });
   const base = createInitialDirectorState();
   useDirectorStore.setState({
     ...useDirectorStore.getState(),
@@ -354,6 +364,110 @@ it("wraps each imported model in its own loading boundary so the rest of the sce
 
   expect(screen.getByText("角色01")).toBeInTheDocument();
   expect(screen.getByText("机位01")).toBeInTheDocument();
+});
+
+it("loads ordinary imported models through the model viewer SDK", async () => {
+  const base = createInitialDirectorState();
+  const modelObject = new Group();
+  mockLoadModelObject.mockResolvedValueOnce({ object: modelObject });
+  useDirectorStore.setState({
+    ...useDirectorStore.getState(),
+    ...base,
+    project: {
+      ...base.project,
+      assets: [
+        {
+          id: "asset_model_1",
+          kind: "prop",
+          sourceType: "model",
+          fileName: "robot.glb",
+          url: "blob:robot",
+        },
+      ],
+      objects: [
+        ...base.project.objects,
+        {
+          id: "obj_model_1",
+          name: "机器人",
+          kind: "prop",
+          visible: true,
+          locked: false,
+          assetRefId: "asset_model_1",
+          transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+        },
+      ],
+    },
+  });
+
+  render(<SceneRoot />);
+
+  await waitFor(() => expect(mockLoadModelObject).toHaveBeenCalledTimes(1));
+  expect(mockLoadModelObject).toHaveBeenCalledWith(
+    "blob:robot",
+    expect.objectContaining({ fileName: "robot.glb", center: false, shadows: true, signal: expect.any(AbortSignal) })
+  );
+});
+
+it("shows an SDK parse error without unmounting the rest of the scene", async () => {
+  const base = createInitialDirectorState();
+  mockLoadModelObject.mockRejectedValueOnce(new Error("损坏的 GLB"));
+  useDirectorStore.setState({
+    ...useDirectorStore.getState(),
+    ...base,
+    project: {
+      ...base.project,
+      assets: [{ id: "asset_model_1", kind: "prop", sourceType: "model", fileName: "broken.glb", url: "blob:broken" }],
+      objects: [
+        ...base.project.objects,
+        {
+          id: "obj_model_1",
+          name: "损坏模型",
+          kind: "prop",
+          visible: true,
+          locked: false,
+          assetRefId: "asset_model_1",
+          transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+        },
+      ],
+    },
+  });
+
+  render(<SceneRoot />);
+
+  await waitFor(() => expect(document.querySelector(".capture-status")).toHaveTextContent("损坏的 GLB"));
+  expect(screen.getByText("角色01")).toBeInTheDocument();
+});
+
+it("disposes a loaded imported model when the scene unmounts", async () => {
+  const base = createInitialDirectorState();
+  const modelObject = new Group();
+  mockLoadModelObject.mockResolvedValueOnce({ object: modelObject });
+  useDirectorStore.setState({
+    ...useDirectorStore.getState(),
+    ...base,
+    project: {
+      ...base.project,
+      assets: [{ id: "asset_model_1", kind: "prop", sourceType: "model", fileName: "robot.fbx", url: "blob:robot" }],
+      objects: [
+        ...base.project.objects,
+        {
+          id: "obj_model_1",
+          name: "机器人",
+          kind: "prop",
+          visible: true,
+          locked: false,
+          assetRefId: "asset_model_1",
+          transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+        },
+      ],
+    },
+  });
+
+  const view = render(<SceneRoot />);
+  await waitFor(() => expect(mockLoadModelObject).toHaveBeenCalledTimes(1));
+  view.unmount();
+
+  expect(mockDisposeObject3D).toHaveBeenCalledWith(modelObject);
 });
 
 it("keeps imported model normalization neutral for empty bounds", () => {
