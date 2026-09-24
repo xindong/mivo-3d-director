@@ -1282,12 +1282,11 @@ textarea:focus-visible {
   font-size: 12px;
   font-weight: 600;
   line-height: 17px;
-  cursor: pointer;
   transition: background-color 0.16s ease;
 }
 
 .panorama-empty-card:hover,
-.panorama-empty-card:focus-visible {
+.panorama-empty-card:focus-within {
   background: rgb(var(--surface-hover-rgb));
 }
 
@@ -1954,6 +1953,10 @@ textarea:focus-visible {
   font-weight: 600;
   line-height: 17px;
   text-align: left;
+}
+
+.viewport-toolbar-menu.model-import-menu button {
+  text-align: center;
 }
 
 .viewport-toolbar-menu-item-inline {
@@ -3519,14 +3522,10 @@ textarea:focus-visible {
 }
 
 .mivo-logo-mark {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   flex: 0 0 auto;
-  color: #745ef5;
-}
-
-.mivo-logo-button.is-connected .mivo-logo-mark {
-  color: #745ef5;
+  object-fit: contain;
 }
 
 .mivo-logo-button.is-connected {
@@ -3712,16 +3711,15 @@ textarea:focus-visible {
   line-height: 20px;
 }
 
-.panorama-empty-primary {
-  color: rgb(var(--text-rgb));
-}
-
 .panorama-empty-sep {
   color: rgb(var(--text-dim-rgb));
 }
 
 /* Both entries are plain text: neutralise the shared panel button styling. */
 .panorama-empty-card .panorama-empty-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: auto;
   min-width: 0;
   height: auto;
@@ -3735,11 +3733,15 @@ textarea:focus-visible {
   font-size: 13px;
   font-weight: 500;
   line-height: 20px;
+  font-family: inherit;
+  text-align: center;
   cursor: pointer;
   transform: none;
+  transition: color 0.16s ease;
 }
 
-.panorama-empty-card .panorama-empty-link:hover {
+.panorama-empty-card .panorama-empty-link:hover,
+.panorama-empty-card .panorama-empty-link:focus-visible {
   color: rgb(var(--accent-rgb));
   background: transparent;
 }

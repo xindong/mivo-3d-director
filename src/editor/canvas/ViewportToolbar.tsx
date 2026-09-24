@@ -34,7 +34,7 @@ import { downloadMivoAsset, type MivoAsset } from "../mivo/mivoClient";
 import { useMivoStore } from "../mivo/mivoStore";
 import { MivoAssetPicker } from "../panels/MivoAssetPicker";
 import { MivoConnectDialog } from "../panels/MivoConnectDialog";
-import mivoLogoUrl from "../../assets/mivo-logo.svg";
+import mivoLogoUrl from "../../assets/mivo-logo.png";
 import { LOCAL_MODEL_ACCEPT, readLocalModelFile } from "../loaders/localModelImport";
 import { readPanoramaFile } from "../loaders/panoramaImport";
 import {
@@ -102,10 +102,12 @@ export function ViewportToolbar({
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const aspectRatioPanelRef = useRef<HTMLDivElement | null>(null);
   const characterTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const modelImportTriggerRef = useRef<HTMLButtonElement | null>(null);
   const geometryTriggerRef = useRef<HTMLButtonElement | null>(null);
   const crowdTriggerRef = useRef<HTMLButtonElement | null>(null);
   const modelLibraryTriggerRef = useRef<HTMLButtonElement | null>(null);
   const characterMenuRef = useRef<HTMLDivElement | null>(null);
+  const modelImportMenuRef = useRef<HTMLDivElement | null>(null);
   const geometryMenuRef = useRef<HTMLDivElement | null>(null);
   const crowdPanelRef = useRef<HTMLDivElement | null>(null);
   const modelLibraryPanelRef = useRef<HTMLDivElement | null>(null);
@@ -122,6 +124,7 @@ export function ViewportToolbar({
   const [aspectRatioPanelOpen, setAspectRatioPanelOpen] = useState(false);
   const [toolbarHeight, setToolbarHeight] = useState(DEFAULT_VIEWPORT_TOOLBAR_HEIGHT);
   const [characterMenuStyle, setCharacterMenuStyle] = useState<CSSProperties>({});
+  const [modelImportMenuStyle, setModelImportMenuStyle] = useState<CSSProperties>({});
   const [geometryMenuStyle, setGeometryMenuStyle] = useState<CSSProperties>({});
   const [crowdPanelStyle, setCrowdPanelStyle] = useState<CSSProperties>({});
   const [modelLibraryPanelStyle, setModelLibraryPanelStyle] = useState<CSSProperties>({});
@@ -153,11 +156,12 @@ export function ViewportToolbar({
   const mivoConnected = useMivoStore((state) => state.status === "connected");
 
   useEffect(() => {
-    if (!characterMenuOpen && !crowdPanelOpen && !modelLibraryOpen && !aspectRatioPanelOpen) return;
+    if (!characterMenuOpen && !crowdPanelOpen && !modelLibraryOpen && !modelImportMenuOpen && !aspectRatioPanelOpen) return;
 
     function closeMenusOnOutsidePointerDown(event: PointerEvent) {
       if (event.target instanceof Node && toolbarRef.current?.contains(event.target)) return;
       if (event.target instanceof Node && characterMenuRef.current?.contains(event.target)) return;
+      if (event.target instanceof Node && modelImportMenuRef.current?.contains(event.target)) return;
       if (event.target instanceof Node && geometryMenuRef.current?.contains(event.target)) return;
       if (event.target instanceof Node && crowdPanelRef.current?.contains(event.target)) return;
       if (event.target instanceof Node && modelLibraryPanelRef.current?.contains(event.target)) return;
@@ -167,6 +171,7 @@ export function ViewportToolbar({
       if (event.target instanceof Node && panoramaInputRef.current?.contains(event.target)) return;
 
       setCharacterMenuOpen(false);
+      setModelImportMenuOpen(false);
       setGeometryMenuOpen(false);
       setCrowdPanelOpen(false);
       setModelLibraryOpen(false);
@@ -178,7 +183,7 @@ export function ViewportToolbar({
     return () => {
       document.removeEventListener("pointerdown", closeMenusOnOutsidePointerDown);
     };
-  }, [aspectRatioPanelOpen, characterMenuOpen, crowdPanelOpen, modelLibraryOpen]);
+  }, [aspectRatioPanelOpen, characterMenuOpen, crowdPanelOpen, modelImportMenuOpen, modelLibraryOpen]);
 
   useLayoutEffect(() => {
     const element = toolbarRef.current;
@@ -224,6 +229,14 @@ export function ViewportToolbar({
         });
       }
 
+      if (modelImportMenuOpen && modelImportTriggerRef.current) {
+        const triggerRect = modelImportTriggerRef.current.getBoundingClientRect();
+        setModelImportMenuStyle({
+          left: triggerRect.left - frameRect.left + triggerRect.width / 2,
+          bottom: frameRect.bottom - triggerRect.top + 8,
+        });
+      }
+
       if (geometryMenuOpen && geometryTriggerRef.current) {
         const triggerRect = geometryTriggerRef.current.getBoundingClientRect();
         setGeometryMenuStyle({
@@ -264,6 +277,9 @@ export function ViewportToolbar({
     if (characterTriggerRef.current) {
       resizeObserver.observe(characterTriggerRef.current);
     }
+    if (modelImportTriggerRef.current) {
+      resizeObserver.observe(modelImportTriggerRef.current);
+    }
     if (geometryTriggerRef.current) {
       resizeObserver.observe(geometryTriggerRef.current);
     }
@@ -279,7 +295,7 @@ export function ViewportToolbar({
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateFloatingPositions);
     };
-  }, [characterMenuOpen, crowdPanelOpen, geometryMenuOpen, modelLibraryOpen]);
+  }, [characterMenuOpen, crowdPanelOpen, geometryMenuOpen, modelImportMenuOpen, modelLibraryOpen]);
 
   async function handleLocalModelChange(
     event: ChangeEvent<HTMLInputElement>,
@@ -364,6 +380,16 @@ export function ViewportToolbar({
 
   function toggleCharacterMenu() {
     setCharacterMenuOpen((isOpen) => !isOpen);
+    setModelImportMenuOpen(false);
+    setGeometryMenuOpen(false);
+    setCrowdPanelOpen(false);
+    setModelLibraryOpen(false);
+    setAspectRatioPanelOpen(false);
+  }
+
+  function toggleModelImportMenu() {
+    setModelImportMenuOpen((isOpen) => !isOpen);
+    setCharacterMenuOpen(false);
     setGeometryMenuOpen(false);
     setCrowdPanelOpen(false);
     setModelLibraryOpen(false);
@@ -462,6 +488,7 @@ export function ViewportToolbar({
   function toggleAspectRatioPanel() {
     setAspectRatioPanelOpen((isOpen) => !isOpen);
     setCharacterMenuOpen(false);
+    setModelImportMenuOpen(false);
     setGeometryMenuOpen(false);
     setCrowdPanelOpen(false);
     setModelLibraryOpen(false);
@@ -481,7 +508,7 @@ export function ViewportToolbar({
       group: "add",
       label: "导入模型",
       icon: Box,
-      onClick: () => setModelImportMenuOpen((isOpen) => !isOpen),
+      onClick: toggleModelImportMenu,
     },
     { group: "add", label: "添加机位", icon: Video, onClick: addCameraFromViewport },
     { group: "capture", label: "选择画幅比例", icon: Ratio, onClick: toggleAspectRatioPanel },
@@ -495,15 +522,28 @@ export function ViewportToolbar({
   function renderActionButton(action: ToolbarAction) {
     const Icon = action.icon;
     const active = action.mode ? transformMode === action.mode : false;
+    const menuOpen =
+      action.label === "添加角色"
+        ? characterMenuOpen
+        : action.label === "导入模型"
+          ? modelImportMenuOpen
+          : undefined;
 
     return (
       <button
         key={action.label}
         aria-label={action.label}
-        aria-expanded={action.label === "添加角色" ? characterMenuOpen : undefined}
+        aria-expanded={menuOpen}
+        aria-haspopup={menuOpen === undefined ? undefined : "menu"}
         aria-pressed={action.mode ? active : undefined}
         className={`ui-icon-button viewport-toolbar-button${active ? " is-active" : ""}`}
-        ref={action.label === "添加角色" ? characterTriggerRef : undefined}
+        ref={
+          action.label === "添加角色"
+            ? characterTriggerRef
+            : action.label === "导入模型"
+              ? modelImportTriggerRef
+              : undefined
+        }
         type="button"
         onClick={action.onClick}
       >
@@ -566,7 +606,13 @@ export function ViewportToolbar({
         {renderToolbarActions()}
       </div>
       {modelImportMenuOpen ? (
-        <div className="viewport-toolbar-menu" role="menu" aria-label="选择模型来源">
+        <div
+          ref={modelImportMenuRef}
+          className="viewport-toolbar-menu model-import-menu"
+          role="menu"
+          aria-label="选择模型来源"
+          style={modelImportMenuStyle}
+        >
           <button
             className="viewport-toolbar-menu-item"
             role="menuitem"

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, LogOut, X } from "lucide-react";
 import { useMivoStore } from "../mivo/mivoStore";
-import mivoLogoUrl from "../../assets/mivo-logo.svg";
+import mivoLogoUrl from "../../assets/mivo-logo.png";
 
 export function MivoConnectDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const status = useMivoStore((state) => state.status);

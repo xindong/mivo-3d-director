@@ -357,30 +357,18 @@ export function ScenePanel() {
             <span className="panorama-thumbnail-name">{panoramaAsset.fileName}</span>
           </div>
         ) : (
-          <div
-            className="panorama-empty-card"
-            role="button"
-            tabIndex={0}
-            aria-label="全景图连接状态"
-            onClick={openMivoPanoramaPicker}
-            onKeyDown={handlePanoramaCardKeyDown}
-          >
+          <div className="panorama-empty-card">
             <span className="panorama-empty-icon" data-testid="panorama-empty-icon">
               <ImageOff aria-hidden="true" size={16} strokeWidth={1.8} />
             </span>
             <span className="panorama-empty-actions">
-              <span className="panorama-empty-primary">从 Mivo 选择</span>
+              <button className="panorama-empty-link" type="button" onClick={openMivoPanoramaPicker}>
+                从 Mivo 选择
+              </button>
               <span aria-hidden="true" className="panorama-empty-sep">
                 /
               </span>
-              <button
-                className="panorama-empty-link"
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openLocalPanoramaPicker();
-                }}
-              >
+              <button className="panorama-empty-link" type="button" onClick={openLocalPanoramaPicker}>
                 从本地选择
               </button>
             </span>
