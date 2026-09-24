@@ -3758,6 +3758,16 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
+/* Keep the label vertically centred inside the floating menu items. */
+.panorama-source-menu .panorama-source-item {
+  display: flex;
+  align-items: center;
+  min-height: 0;
+  padding: 0 12px;
+  line-height: 1;
+  transform: none;
+}
+
 .panorama-source-item:hover {
   color: #ffffff;
   background: rgb(var(--accent-rgb) / 0.18);
