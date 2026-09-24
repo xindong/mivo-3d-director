@@ -406,6 +406,24 @@ it("offsets the native viewport gizmo inward when overlay side panels are open",
   });
 });
 
+it("hints that the camera view is fixed when the user tries to move the scene", () => {
+  useDirectorStore.setState({
+    ...useDirectorStore.getState(),
+    viewMode: "camera",
+  });
+
+  render(<App />);
+
+  const frame = document.querySelector(".canvas-frame") as HTMLElement;
+
+  fireEvent.wheel(frame);
+  fireEvent.pointerDown(frame);
+
+  // Repeated intent keeps a single hint on screen instead of stacking copies.
+  expect(screen.getAllByText(/相机视角下/)).toHaveLength(1);
+  expect(screen.getByText(/请切换到导演视角/)).toBeInTheDocument();
+});
+
 it("resets back to the director view from the button under the gizmo", () => {
   useDirectorStore.setState({
     ...useDirectorStore.getState(),

@@ -26,6 +26,7 @@ import { ViewportAspectOverlay } from "./ViewportAspectOverlay";
 import { ViewportBackground } from "./ViewportBackground";
 import { ViewportToolbar } from "./ViewportToolbar";
 import { getViewportAspectFrameRect, type ViewportSafeAreaInsets } from "./viewportAspectFrame";
+import { notifyCameraViewIntent } from "./viewportModeHint";
 
 export const DEFAULT_DIRECTOR_VIEW_SNAPSHOT: CameraShotSnapshot = DEFAULT_DIRECTOR_CAMERA_VIEW_SNAPSHOT;
 const VIEWPORT_FRAME_PADDING = 40;
@@ -592,6 +593,7 @@ function ViewportGizmoOverlay({
 
 export function DirectorCanvas() {
   const viewMode = useDirectorStore((state) => state.viewMode);
+  const canvasFrameRef = useRef<HTMLDivElement>(null);
   const openSceneInspector = useDirectorStore((state) => state.openSceneInspector);
   const sceneSettings = useDirectorStore((state) => state.project.scene);
   const assets = useDirectorStore((state) => state.project.assets);
@@ -721,8 +723,26 @@ export function DirectorCanvas() {
   const aspectOverlayBottomPadding =
     VIEWPORT_FRAME_PADDING + VIEWPORT_TOOLBAR_BOTTOM_OFFSET + toolbarHeight;
 
+  // In camera view the orbit controls are off: wheel/drag means "I want to change the view".
+  useEffect(() => {
+    if (viewMode !== "camera") return undefined;
+
+    const element = canvasFrameRef.current;
+    if (!element) return undefined;
+
+    const handleIntent = () => notifyCameraViewIntent();
+
+    element.addEventListener("wheel", handleIntent, { passive: true });
+    element.addEventListener("pointerdown", handleIntent);
+
+    return () => {
+      element.removeEventListener("wheel", handleIntent);
+      element.removeEventListener("pointerdown", handleIntent);
+    };
+  }, [viewMode]);
+
   return (
-    <div className="canvas-frame">
+    <div className="canvas-frame" ref={canvasFrameRef}>
       <div className="director-canvas" data-testid="director-canvas">
         <Canvas
           camera={{ position: DEFAULT_DIRECTOR_VIEW_SNAPSHOT.position, fov: DEFAULT_DIRECTOR_VIEW_SNAPSHOT.fov }}

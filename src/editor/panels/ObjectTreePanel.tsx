@@ -75,9 +75,9 @@ export function ObjectTreePanel() {
   const selectedObjectIds = useDirectorStore((state) => state.selectedObjectIds);
   const selectedCrowdId = useDirectorStore((state) => state.selectedCrowdId);
   const selectObject = useDirectorStore((state) => state.selectObject);
+  const focusObject = useDirectorStore((state) => state.focusObject);
   const selectCrowd = useDirectorStore((state) => state.selectCrowd);
   const toggleObjectSelection = useDirectorStore((state) => state.toggleObjectSelection);
-  const setActiveCamera = useDirectorStore((state) => state.setActiveCamera);
   const toggleObjectVisible = useDirectorStore((state) => state.toggleObjectVisible);
   const toggleObjectLocked = useDirectorStore((state) => state.toggleObjectLocked);
   const deleteSelectedObject = useDirectorStore((state) => state.deleteSelectedObject);
@@ -277,10 +277,18 @@ export function ObjectTreePanel() {
       return;
     }
 
-    if (item.object?.kind === "camera" && item.object.linkedCameraId) {
-      setActiveCamera(item.object.linkedCameraId);
+    const selectedIds = getSelectedIds();
+    const clickedIsCamera = item.object?.kind === "camera";
+    const selectionHasCamera = selectedIds.some(
+      (id) => useDirectorStore.getState().project.objects.find((object) => object.id === id)?.kind === "camera"
+    );
+
+    // Camera and non-camera picks are independent: keep the other kind selected.
+    if (clickedIsCamera || selectionHasCamera) {
+      focusObject(item.id);
       return;
     }
+
     selectObject(item.id);
   }
 

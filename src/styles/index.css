@@ -297,7 +297,41 @@ textarea:focus-visible {
   top: 16px;
   left: 50%;
   z-index: 60;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
   transform: translateX(-50%);
+}
+
+.viewport-mode-hint {
+  width: max-content;
+  max-width: min(560px, calc(100vw - 48px));
+  margin: 0;
+  border: 1px solid rgb(255 159 67 / 0.45);
+  border-radius: 8px;
+  padding: 8px 14px;
+  color: #ffb457;
+  background: rgb(var(--panel-rgb) / 0.94);
+  box-shadow: var(--ui-shadow-panel);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+  animation: viewport-mode-hint-in 0.16s ease;
+}
+
+@keyframes viewport-mode-hint-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .ui-icon-button,
@@ -1701,8 +1735,16 @@ textarea:focus-visible {
   background: transparent;
 }
 
-.object-row[aria-selected="true"] {
-  background: rgb(var(--surface-hover-rgb));
+.object-row[aria-selected="true"],
+.object-row.is-selected {
+  background: rgb(var(--accent-rgb) / 0.16);
+  box-shadow: inset 2px 0 0 rgb(var(--accent-rgb));
+}
+
+.object-row[aria-selected="true"] .object-select-button span,
+.object-row.is-selected .object-select-button span {
+  color: rgb(var(--text-rgb));
+  font-weight: 600;
 }
 
 .object-row:hover {

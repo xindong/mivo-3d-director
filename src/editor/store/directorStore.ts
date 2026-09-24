@@ -97,6 +97,7 @@ export interface DirectorActions {
   toggleViewportPanelsCollapsed: () => void;
   setViewportPanelsCollapsed: (collapsed: boolean) => void;
   selectObject: (id: string | null) => void;
+  focusObject: (id: string) => void;
   selectCrowd: (crowdId: string | null) => void;
   toggleObjectSelection: (id: string) => void;
   openSceneInspector: () => void;
@@ -1354,6 +1355,28 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
             ...state.project,
             activeCameraId:
               selectedObject?.kind === "camera" && selectedObject.linkedCameraId
+                ? selectedObject.linkedCameraId
+                : state.project.activeCameraId,
+          },
+        };
+      }),
+    focusObject: (id) =>
+      commitUiMutation((state) => {
+        const selectedObject = state.project.objects.find((item) => item.id === id);
+        if (!selectedObject) return state;
+
+        const selectedObjectIds = getOrderedSelectedObjectIds(state);
+        const nextSelectedObjectIds = selectedObjectIds.includes(id) ? selectedObjectIds : [...selectedObjectIds, id];
+
+        return {
+          ...state,
+          selectedObjectId: id,
+          selectedObjectIds: nextSelectedObjectIds,
+          directorInspectorMode: "auto",
+          project: {
+            ...state.project,
+            activeCameraId:
+              selectedObject.kind === "camera" && selectedObject.linkedCameraId
                 ? selectedObject.linkedCameraId
                 : state.project.activeCameraId,
           },

@@ -143,6 +143,24 @@ it("repairs a corrupted persisted scene instead of restoring an unusable one", (
   expect(restored.project.scene.position).toEqual([0, 0, 0]);
 });
 
+it("keeps camera and object selections independent and persists both", () => {
+  useDirectorStore.getState().selectObject("char_default_a");
+  useDirectorStore.getState().focusObject("cam_object_1");
+
+  const state = useDirectorStore.getState();
+
+  expect(state.selectedObjectId).toBe("cam_object_1");
+  expect(state.selectedObjectIds).toEqual(["char_default_a", "cam_object_1"]);
+  expect(state.project.activeCameraId).toBe("cam_1");
+
+  useDirectorStore.getState().saveLatestSnapshot();
+
+  const restored = createInitialDirectorState({ includePersistedScene: true });
+
+  expect(restored.selectedObjectId).toBe("cam_object_1");
+  expect(restored.selectedObjectIds).toEqual(["char_default_a", "cam_object_1"]);
+});
+
 it("resets the scene back to the initial demo state", () => {
   useDirectorStore.getState().addPresetCharacter();
   useDirectorStore.getState().saveLatestSnapshot();

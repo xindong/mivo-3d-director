@@ -44,6 +44,21 @@ it("shows visibility, lock, and delete controls for each object", () => {
   expect(screen.getByLabelText("删除 角色01")).toBeInTheDocument();
 });
 
+it("keeps the camera and role selections independent", async () => {
+  const user = userEvent.setup();
+  render(<ObjectTreePanel />);
+
+  await user.click(screen.getByRole("treeitem", { name: "机位01" }));
+  await user.click(screen.getByRole("treeitem", { name: "角色01" }));
+
+  const state = useDirectorStore.getState();
+
+  expect(state.selectedObjectId).toBe("char_default_a");
+  expect(state.selectedObjectIds).toContain("cam_object_1");
+  expect(state.selectedObjectIds).toContain("char_default_a");
+  expect(state.project.activeCameraId).toBe("cam_1");
+});
+
 it("removes the object from its row delete button", async () => {
   const user = userEvent.setup();
   render(<ObjectTreePanel />);
