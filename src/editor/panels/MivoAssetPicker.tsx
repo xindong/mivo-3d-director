@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, type UIEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type UIEvent } from "react";
 import { createPortal } from "react-dom";
-import { Check, Loader2, Search, X } from "lucide-react";
+import { Check, ImageOff, Loader2, Search, X } from "lucide-react";
 import { fetchMivoAssets, type MivoAsset, type MivoAssetKind, type MivoAssetProvider } from "../mivo/mivoClient";
 import { useMivoStore } from "../mivo/mivoStore";
 
@@ -34,6 +34,8 @@ export function MivoAssetPicker({
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
   const [applying, setApplying] = useState(false);
+  const [brokenIds, setBrokenIds] = useState<string[]>([]);
+  const listRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   /** Loads one page; `append` powers the infinite scroll at the bottom of the list. */
@@ -61,9 +63,16 @@ export function MivoAssetPicker({
           offset: nextOffset,
         });
 
-        setAssets((current) => (append ? [...current, ...items] : items));
+        setAssets((current) => {
+          const merged = append ? [...current, ...items] : items;
+          const unique = Array.from(new Map(merged.map((asset) => [asset.fileId, asset])).values());
+
+          // Appending made no progress -> the API repeated the same page, stop paging.
+          setHasMore(items.length > 0 && (!append || unique.length > current.length));
+
+          return unique;
+        });
         setOffset(nextOffset + items.length);
-        setHasMore(items.length >= PAGE_SIZE);
       } catch (loadError) {
         setError((loadError as Error).message);
         if (!append) setAssets([]);
@@ -80,14 +89,30 @@ export function MivoAssetPicker({
     [loadPage]
   );
 
-  function handleListScroll(event: UIEvent<HTMLDivElement>) {
-    const list = event.currentTarget;
+  function isNearBottom(list: HTMLDivElement) {
+    return list.scrollTop + list.clientHeight >= list.scrollHeight - 120;
+  }
 
+  function handleListScroll(event: UIEvent<HTMLDivElement>) {
     if (loading || loadingMore || !hasMore || !assets.length) return;
-    if (list.scrollTop + list.clientHeight < list.scrollHeight - 120) return;
+    if (!isNearBottom(event.currentTarget)) return;
 
     void loadPage(provider, keyword, offset, true);
   }
+
+  /**
+   * After a page lands the list is often still pinned to the bottom, which produces no new
+   * scroll event — keep loading until the user scrolls away or the API runs out.
+   */
+  useEffect(() => {
+    const list = listRef.current;
+
+    if (!list || loading || loadingMore || !hasMore || !assets.length) return;
+    if (list.scrollHeight <= list.clientHeight) return;
+    if (!isNearBottom(list)) return;
+
+    void loadPage(provider, keyword, offset, true);
+  }, [assets, hasMore, keyword, loadPage, loading, loadingMore, offset, provider]);
 
   useEffect(() => {
     if (!open) return;
@@ -96,6 +121,7 @@ export function MivoAssetPicker({
     setKeyword("");
     setOffset(0);
     setHasMore(true);
+    setBrokenIds([]);
     void loadAssets(provider, "");
     // Reload only when the dialog opens or the kind changes; provider tabs reload explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -186,7 +212,7 @@ export function MivoAssetPicker({
           </label>
         </div>
 
-        <div className="mivo-picker-body" onScroll={handleListScroll}>
+        <div className="mivo-picker-body" ref={listRef} onScroll={handleListScroll}>
           {loading ? (
             <div className="mivo-picker-status">
               <Loader2 aria-hidden="true" className="mivo-spin" size={18} strokeWidth={2} />
@@ -219,9 +245,23 @@ export function MivoAssetPicker({
                     }}
                   >
                     <span className="mivo-picker-thumb">
-                      {asset.thumbnail ? (
-                        <img alt="" aria-hidden="true" loading="lazy" src={asset.thumbnail} />
-                      ) : null}
+                      {asset.thumbnail && !brokenIds.includes(asset.fileId) ? (
+                        <img
+                          alt=""
+                          aria-hidden="true"
+                          loading="lazy"
+                          src={asset.thumbnail}
+                          onError={() =>
+                            setBrokenIds((current) =>
+                              current.includes(asset.fileId) ? current : [...current, asset.fileId]
+                            )
+                          }
+                        />
+                      ) : (
+                        <span className="mivo-picker-placeholder" aria-hidden="true">
+                          <ImageOff size={22} strokeWidth={1.6} />
+                        </span>
+                      )}
                       {selected ? (
                         <span className="mivo-picker-check">
                           <Check aria-hidden="true" size={14} strokeWidth={3} />
