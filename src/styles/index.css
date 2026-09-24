@@ -3668,12 +3668,12 @@ textarea:focus-visible {
 }
 
 .mivo-picker-card {
-  display: grid;
-  gap: 6px;
+  display: block;
   min-width: 0;
   border: 1px solid transparent;
   border-radius: 10px;
-  padding: 6px;
+  padding: 0;
+  overflow: hidden;
   color: rgb(255 255 255 / 0.7);
   background: rgb(255 255 255 / 0.04);
   cursor: pointer;
@@ -3686,7 +3686,7 @@ textarea:focus-visible {
 
 .mivo-picker-card.is-selected {
   border-color: #745ef5;
-  background: rgb(116 94 245 / 0.16);
+  background: #1a1a1a;
 }
 
 .mivo-picker-thumb {
@@ -3694,7 +3694,6 @@ textarea:focus-visible {
   display: block;
   aspect-ratio: 1 / 1;
   overflow: hidden;
-  border-radius: 8px;
   background: #1a1a1a;
 }
 

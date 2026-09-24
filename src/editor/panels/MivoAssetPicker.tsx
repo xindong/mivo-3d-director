@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type UIEvent } from "react";
 import { createPortal } from "react-dom";
-import { Check, ImageOff, Loader2, Search, X } from "lucide-react";
+import { Check, ImageOff, Loader2, X } from "lucide-react";
 import { fetchMivoAssets, type MivoAsset, type MivoAssetKind, type MivoAssetProvider } from "../mivo/mivoClient";
 import { useMivoStore } from "../mivo/mivoStore";
 
@@ -26,7 +26,6 @@ export function MivoAssetPicker({
 }) {
   const session = useMivoStore((state) => state.session);
   const [provider, setProvider] = useState<MivoAssetProvider>("generate");
-  const [keyword, setKeyword] = useState("");
   const [assets, setAssets] = useState<MivoAsset[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,7 +39,7 @@ export function MivoAssetPicker({
 
   /** Loads one page; `append` powers the infinite scroll at the bottom of the list. */
   const loadPage = useCallback(
-    async (nextProvider: MivoAssetProvider, nextKeyword: string, nextOffset: number, append: boolean) => {
+    async (nextProvider: MivoAssetProvider, nextOffset: number, append: boolean) => {
       if (!session) {
         setError("尚未连接 Mivo，请先连接");
         return;
@@ -58,7 +57,6 @@ export function MivoAssetPicker({
         const items = await fetchMivoAssets(session, {
           fileType: kind,
           provider: nextProvider,
-          keyword: nextKeyword.trim() || undefined,
           limit: PAGE_SIZE,
           offset: nextOffset,
         });
@@ -85,7 +83,7 @@ export function MivoAssetPicker({
   );
 
   const loadAssets = useCallback(
-    (nextProvider: MivoAssetProvider, nextKeyword: string) => loadPage(nextProvider, nextKeyword, 0, false),
+    (nextProvider: MivoAssetProvider) => loadPage(nextProvider, 0, false),
     [loadPage]
   );
 
@@ -97,7 +95,7 @@ export function MivoAssetPicker({
     if (loading || loadingMore || !hasMore || !assets.length) return;
     if (!isNearBottom(event.currentTarget)) return;
 
-    void loadPage(provider, keyword, offset, true);
+    void loadPage(provider, offset, true);
   }
 
   /**
@@ -111,18 +109,17 @@ export function MivoAssetPicker({
     if (list.scrollHeight <= list.clientHeight) return;
     if (!isNearBottom(list)) return;
 
-    void loadPage(provider, keyword, offset, true);
-  }, [assets, hasMore, keyword, loadPage, loading, loadingMore, offset, provider]);
+    void loadPage(provider, offset, true);
+  }, [assets, hasMore, loadPage, loading, loadingMore, offset, provider]);
 
   useEffect(() => {
     if (!open) return;
 
     setSelectedIds([]);
-    setKeyword("");
     setOffset(0);
     setHasMore(true);
     setBrokenIds([]);
-    void loadAssets(provider, "");
+    void loadAssets(provider);
     // Reload only when the dialog opens or the kind changes; provider tabs reload explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, kind]);
@@ -190,26 +187,14 @@ export function MivoAssetPicker({
                 type="button"
                 onClick={() => {
                   setProvider(item.id);
-                  void loadAssets(item.id, keyword);
+                  void loadAssets(item.id);
                 }}
               >
                 {item.label}
               </button>
             ))}
           </div>
-          <label className="mivo-picker-search">
-            <Search aria-hidden="true" size={14} strokeWidth={1.9} />
-            <input
-              aria-label={`搜索${typeLabel}`}
-              className="mivo-input mivo-picker-search-input"
-              placeholder="搜索名称"
-              value={keyword}
-              onChange={(event) => setKeyword(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void loadAssets(provider, keyword);
-              }}
-            />
-          </label>
+
         </div>
 
         <div className="mivo-picker-body" ref={listRef} onScroll={handleListScroll}>
@@ -268,7 +253,6 @@ export function MivoAssetPicker({
                         </span>
                       ) : null}
                     </span>
-                    <span className="mivo-picker-name">{asset.name}</span>
                   </button>
                 );
               })}
