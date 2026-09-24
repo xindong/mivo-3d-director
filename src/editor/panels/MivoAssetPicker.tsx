@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type UIEvent } from "react";
 import { createPortal } from "react-dom";
 import { Check, Loader2, Search, X } from "lucide-react";
 import { fetchMivoAssets, type MivoAsset, type MivoAssetKind, type MivoAssetProvider } from "../mivo/mivoClient";
@@ -30,17 +30,26 @@ export function MivoAssetPicker({
   const [assets, setAssets] = useState<MivoAsset[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [offset, setOffset] = useState(0);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadAssets = useCallback(
-    async (nextProvider: MivoAssetProvider, nextKeyword: string) => {
+  /** Loads one page; `append` powers the infinite scroll at the bottom of the list. */
+  const loadPage = useCallback(
+    async (nextProvider: MivoAssetProvider, nextKeyword: string, nextOffset: number, append: boolean) => {
       if (!session) {
         setError("尚未连接 Mivo，请先连接");
         return;
       }
 
-      setLoading(true);
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+
       setError(null);
 
       try {
@@ -49,24 +58,44 @@ export function MivoAssetPicker({
           provider: nextProvider,
           keyword: nextKeyword.trim() || undefined,
           limit: PAGE_SIZE,
+          offset: nextOffset,
         });
 
-        setAssets(items);
+        setAssets((current) => (append ? [...current, ...items] : items));
+        setOffset(nextOffset + items.length);
+        setHasMore(items.length >= PAGE_SIZE);
       } catch (loadError) {
         setError((loadError as Error).message);
-        setAssets([]);
+        if (!append) setAssets([]);
       } finally {
         setLoading(false);
+        setLoadingMore(false);
       }
     },
     [kind, session]
   );
+
+  const loadAssets = useCallback(
+    (nextProvider: MivoAssetProvider, nextKeyword: string) => loadPage(nextProvider, nextKeyword, 0, false),
+    [loadPage]
+  );
+
+  function handleListScroll(event: UIEvent<HTMLDivElement>) {
+    const list = event.currentTarget;
+
+    if (loading || loadingMore || !hasMore || !assets.length) return;
+    if (list.scrollTop + list.clientHeight < list.scrollHeight - 120) return;
+
+    void loadPage(provider, keyword, offset, true);
+  }
 
   useEffect(() => {
     if (!open) return;
 
     setSelectedIds([]);
     setKeyword("");
+    setOffset(0);
+    setHasMore(true);
     void loadAssets(provider, "");
     // Reload only when the dialog opens or the kind changes; provider tabs reload explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -157,7 +186,7 @@ export function MivoAssetPicker({
           </label>
         </div>
 
-        <div className="mivo-picker-body">
+        <div className="mivo-picker-body" onScroll={handleListScroll}>
           {loading ? (
             <div className="mivo-picker-status">
               <Loader2 aria-hidden="true" className="mivo-spin" size={18} strokeWidth={2} />
@@ -205,6 +234,12 @@ export function MivoAssetPicker({
               })}
             </div>
           )}
+          {loadingMore ? (
+            <div className="mivo-picker-more">
+              <Loader2 aria-hidden="true" className="mivo-spin" size={14} strokeWidth={2} />
+              加载更多…
+            </div>
+          ) : null}
         </div>
 
         {singleSelect ? null : (

@@ -239,6 +239,32 @@ export async function downloadMivoAsset(session: string, asset: MivoAsset): Prom
   return new File([blob], asset.name, { type: blob.type || asset.contentType || "application/octet-stream" });
 }
 
+/** Uploads an image/file to Mivo (multipart, same contract as the Mivo web client). */
+export async function uploadMivoFile(session: string, file: File): Promise<void> {
+  const form = new FormData();
+
+  form.append("file", file);
+
+  const response = await fetch(`${getEndpoint()}/api/v1/file/`, {
+    method: "POST",
+    // No explicit Content-Type: the browser adds the multipart boundary.
+    headers: { Authorization: `Bearer ${session}` },
+    body: form,
+  });
+
+  if (!response.ok) {
+    throw new Error(response.status === 401 ? "登录已过期，请重新连接 Mivo" : `上传失败（HTTP ${response.status}）`);
+  }
+}
+
+/** Turns a data URL (camera captures) into a File so it can be uploaded. */
+export async function dataUrlToFile(dataUrl: string, fileName: string): Promise<File> {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+
+  return new File([blob], fileName, { type: blob.type || "image/png" });
+}
+
 /** Cheap reachability probe used to turn a proxy/network failure into a readable message. */
 export async function probeMivoEndpoint(): Promise<boolean> {
   try {

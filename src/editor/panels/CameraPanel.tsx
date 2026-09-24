@@ -1,4 +1,4 @@
-import { Camera, Download, Eye, Images, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Camera, Download, Images, Loader2, Trash2, UploadCloud, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -9,6 +9,8 @@ import {
   InspectorTextField,
 } from "./InspectorControls";
 import { downloadDataUrl } from "../io/screenshotExport";
+import { dataUrlToFile, uploadMivoFile } from "../mivo/mivoClient";
+import { useMivoStore } from "../mivo/mivoStore";
 import { requestViewportCapture } from "../io/captureBridge";
 import { getDirectorObjectFocusTarget, isCameraFocusableObject } from "../schema/cameraTarget";
 import type { DirectorCameraCapture } from "../schema/directorProject";
@@ -26,6 +28,8 @@ export function CameraPanel() {
   const activeTab = useDirectorStore((state) => state.cameraInspectorTab);
   const setActiveTab = useDirectorStore((state) => state.setCameraInspectorTab);
   const [captureBusy, setCaptureBusy] = useState(false);
+  const [uploadingCaptureId, setUploadingCaptureId] = useState<string | null>(null);
+  const [captureNotice, setCaptureNotice] = useState<string | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [hoveredCaptureId, setHoveredCaptureId] = useState<string | null>(null);
   const [viewerCapture, setViewerCapture] = useState<DirectorCameraCapture | null>(null);
@@ -148,6 +152,30 @@ export function CameraPanel() {
       setCaptureError(error instanceof Error ? error.message : "机位截图失败");
     } finally {
       setCaptureBusy(false);
+    }
+  }
+
+  async function handleUploadCapture(capture: DirectorCameraCapture) {
+    const session = useMivoStore.getState().getSession();
+
+    if (!session) {
+      setCaptureError("请先在底部工具栏连接 Mivo");
+      return;
+    }
+
+    setCaptureError(null);
+    setCaptureNotice(null);
+    setUploadingCaptureId(capture.id);
+
+    try {
+      const file = await dataUrlToFile(capture.dataUrl, `${capture.name}.png`);
+
+      await uploadMivoFile(session, file);
+      setCaptureNotice(`已上传到 Mivo：${capture.name}.png`);
+    } catch (error) {
+      setCaptureError(error instanceof Error ? error.message : "上传到 Mivo 失败");
+    } finally {
+      setUploadingCaptureId(null);
     }
   }
 
@@ -286,15 +314,20 @@ export function CameraPanel() {
                     <Download aria-hidden="true" size={14} strokeWidth={1.9} />
                   </button>
                   <button
-                    aria-label={`查看截图 ${capture.name}`}
+                    aria-label={`上传截图 ${capture.name}`}
                     className="camera-capture-action"
+                    disabled={uploadingCaptureId === capture.id}
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
-                      setViewerCapture(capture);
+                      void handleUploadCapture(capture);
                     }}
                   >
-                    <Eye aria-hidden="true" size={14} strokeWidth={1.9} />
+                    {uploadingCaptureId === capture.id ? (
+                      <Loader2 aria-hidden="true" className="mivo-spin" size={14} strokeWidth={1.9} />
+                    ) : (
+                      <UploadCloud aria-hidden="true" size={14} strokeWidth={1.9} />
+                    )}
                   </button>
                 </div>
               </div>
@@ -564,6 +597,7 @@ export function CameraPanel() {
       ) : (
         <div className="camera-capture-tab">
           {captureError ? <p className="capture-status">{captureError}</p> : null}
+          {captureNotice ? <p className="capture-status">{captureNotice}</p> : null}
           {renderAllCameraCaptures()}
         </div>
       )}

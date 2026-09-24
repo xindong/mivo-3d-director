@@ -3611,6 +3611,16 @@ textarea:focus-visible {
   font-size: 13px;
 }
 
+.mivo-picker-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 0 6px;
+  color: rgb(255 255 255 / 0.5);
+  font-size: 12px;
+}
+
 .mivo-picker-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));

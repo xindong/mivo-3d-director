@@ -256,7 +256,7 @@ it("renders the thumbnail actions in a bottom bar and opens the project-style vi
 
   expect(screen.getByRole("group", { name: "机位01-截图01 缩略图操作" })).toHaveClass("camera-capture-actions");
 
-  await user.click(screen.getByLabelText("查看截图 机位01-截图01"));
+  await user.click(screen.getByAltText("机位01-截图01 缩略图"));
 
   const viewer = screen.getByRole("dialog", { name: "相机截图查看器" });
   const toolbar = within(viewer).getByRole("toolbar", { name: "相机截图查看器工具栏" });
@@ -284,6 +284,18 @@ it("downloads a single camera capture from the thumbnail action", async () => {
   anchorClick.mockRestore();
 });
 
+it("asks to connect Mivo before uploading a capture to the material library", async () => {
+  const user = userEvent.setup();
+  seedCameraCapture();
+
+  render(<CameraPanel />);
+
+  await user.click(screen.getByRole("button", { name: "摄像机截图" }));
+  await user.click(screen.getByLabelText("上传截图 机位01-截图01"));
+
+  expect(await screen.findByText("请先在底部工具栏连接 Mivo")).toBeInTheDocument();
+});
+
 it("closes the capture viewer when clicking outside the image", async () => {
   const user = userEvent.setup();
   seedCameraCapture();
@@ -292,7 +304,7 @@ it("closes the capture viewer when clicking outside the image", async () => {
 
   await user.click(screen.getByRole("button", { name: "摄像机截图" }));
 
-  await user.click(screen.getByLabelText("查看截图 机位01-截图01"));
+  await user.click(screen.getByAltText("机位01-截图01 缩略图"));
 
   const previewImage = screen.getByAltText("机位01-截图01 查看大图");
   const viewerStage = document.querySelector(".camera-capture-viewer-stage");
@@ -314,7 +326,7 @@ it("zooms the capture preview through the viewer toolbar controls with the canva
 
   await user.click(screen.getByRole("button", { name: "摄像机截图" }));
 
-  await user.click(screen.getByLabelText("查看截图 机位01-截图01"));
+  await user.click(screen.getByAltText("机位01-截图01 缩略图"));
   await user.click(screen.getByRole("button", { name: "放大图片" }));
 
   expect(screen.getByAltText("机位01-截图01 查看大图")).toHaveStyle({
@@ -330,7 +342,7 @@ it("supports wheel zooming and dragging like the canvas image preview", async ()
 
   await user.click(screen.getByRole("button", { name: "摄像机截图" }));
 
-  await user.click(screen.getByLabelText("查看截图 机位01-截图01"));
+  await user.click(screen.getByAltText("机位01-截图01 缩略图"));
 
   const previewImage = screen.getByAltText("机位01-截图01 查看大图");
 
