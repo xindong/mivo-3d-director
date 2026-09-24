@@ -596,8 +596,14 @@ export function CameraPanel() {
         </>
       ) : (
         <div className="camera-capture-tab">
-          {captureError ? <p className="capture-status">{captureError}</p> : null}
-          {captureNotice ? <p className="capture-status">{captureNotice}</p> : null}
+          {captureError || captureNotice ? (
+            <div
+              className={`camera-capture-toast${captureError ? " is-error" : " is-success"}`}
+              role="status"
+            >
+              {captureError ?? captureNotice}
+            </div>
+          ) : null}
           {renderAllCameraCaptures()}
         </div>
       )}

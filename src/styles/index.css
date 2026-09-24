@@ -2951,6 +2951,42 @@ textarea:focus-visible {
   height: 100%;
 }
 
+/* Feedback floats above the grid so it never stretches the layout. */
+.camera-capture-tab {
+  position: relative;
+}
+
+.camera-capture-toast {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  right: 16px;
+  z-index: 5;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: rgb(var(--text-rgb));
+  background: rgb(var(--surface-rgb) / 0.96);
+  box-shadow: var(--ui-shadow-panel);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  font-size: 12px;
+  line-height: 17px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.camera-capture-toast.is-success {
+  border-color: rgb(var(--accent-rgb) / 0.45);
+  color: rgb(var(--text-rgb));
+}
+
+.camera-capture-toast.is-error {
+  border-color: rgb(255 122 122 / 0.45);
+  color: #ff9a9a;
+}
+
 .camera-capture-overview-footer {
   position: absolute;
   left: 0;
