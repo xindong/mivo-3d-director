@@ -50,17 +50,33 @@ function toStringValue(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+/**
+ * The asset API answers either with a flat array or with day buckets:
+ * `[{ date: "2026-09-24", images: [...] }, ...]`. Collect real assets from both shapes.
+ */
 function pickItemArray(payload: unknown): JsonRecord[] {
-  if (Array.isArray(payload)) return payload.filter((item): item is JsonRecord => Boolean(item) && typeof item === "object");
+  if (Array.isArray(payload)) {
+    return payload.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+
+      const record = item as JsonRecord;
+
+      for (const key of ["images", "items", "list", "results", "data", "files"]) {
+        const nested = record[key];
+        if (Array.isArray(nested)) return pickItemArray(nested);
+      }
+
+      // A day bucket without a recognised list is not an asset itself.
+      return record.fileId || record.file_id || record._id ? [record] : [];
+    });
+  }
 
   if (payload && typeof payload === "object") {
     const record = payload as JsonRecord;
 
-    for (const key of ["items", "list", "results", "data"]) {
+    for (const key of ["items", "list", "results", "data", "images", "files"]) {
       const value = record[key];
-      if (Array.isArray(value)) {
-        return value.filter((item): item is JsonRecord => Boolean(item) && typeof item === "object");
-      }
+      if (Array.isArray(value)) return pickItemArray(value);
     }
   }
 
@@ -75,8 +91,8 @@ function mapAsset(item: JsonRecord): MivoAsset {
   return {
     fileId,
     name: toStringValue(item.name ?? item.title ?? item.fileName) || fileId,
-    thumbnail,
-    url,
+    thumbnail: withEndpoint(thumbnail),
+    url: withEndpoint(url),
     contentType: toStringValue(item.contentType ?? item.content_type),
     fileType: toStringValue(item.fileType ?? item.file_type),
     createTime: toStringValue(item.createTime ?? item.create_time ?? item.createdAt),

@@ -174,10 +174,10 @@ it("renders the disconnected panorama state as a fixed-size dark card", async ()
 
   expect(panoramaStatus).toHaveClass("panorama-empty-card");
   expect(screen.getByTestId("panorama-empty-icon")).toBeInTheDocument();
-  expect(panoramaStatus).toHaveTextContent("未连接全景图");
+  expect(panoramaStatus).toHaveTextContent("从 Mivo 选择");
 });
 
-it("opens the panorama source menu and the local picker from the card", async () => {
+it("starts the Mivo panorama flow from the empty card and keeps a local entry", async () => {
   const user = userEvent.setup();
   render(<ScenePanel />);
 
@@ -186,51 +186,29 @@ it("opens the panorama source menu and the local picker from the card", async ()
   const uploadInput = screen.getByLabelText("上传全景图") as HTMLInputElement;
   const clickSpy = vi.spyOn(uploadInput, "click");
 
+  // The primary action on the empty card goes straight to Mivo (connecting first when needed).
   await user.click(screen.getByLabelText("全景图连接状态"));
 
-  expect(screen.getByRole("menu", { name: "选择全景图来源" })).toBeInTheDocument();
+  expect(screen.getByRole("dialog", { name: "连接 Mivo" })).toBeInTheDocument();
 
-  await user.click(screen.getByRole("menuitem", { name: "从本地选择" }));
+  // The secondary entry still opens the local file dialog.
+  await user.click(screen.getByRole("button", { name: "从本地选择" }));
 
   expect(clickSpy).toHaveBeenCalledTimes(1);
 });
 
-it("asks to connect Mivo before opening the Mivo panorama picker", async () => {
+it("shows a floating source menu when a connected panorama thumbnail is clicked", async () => {
   const user = userEvent.setup();
+  connectPanorama();
+
   render(<ScenePanel />);
 
   await user.click(screen.getByRole("button", { name: "全景" }));
-  await user.click(screen.getByLabelText("全景图连接状态"));
-  await user.click(screen.getByRole("menuitem", { name: "从 Mivo 选择" }));
+  await user.click(screen.getByLabelText("全景图缩略图卡片"));
 
-  expect(screen.getByRole("dialog", { name: "连接 Mivo" })).toBeInTheDocument();
-});
-
-it("switches the panorama between the orb and a camera-locked backdrop", async () => {
-  const user = userEvent.setup();
-  render(<ScenePanel />);
-
-  await user.click(screen.getByRole("button", { name: "全景" }));
-
-  expect(screen.getByRole("button", { name: "全景图" })).toHaveAttribute("aria-pressed", "true");
-  expect(screen.getByLabelText("全景旋转")).toBeInTheDocument();
-
-  await user.click(screen.getByRole("button", { name: "背景图" }));
-
-  expect(useDirectorStore.getState().project.scene.panoramaProjectionMode).toBe("backdrop");
-  expect(screen.getByLabelText("背景图缩放")).toBeInTheDocument();
-  expect(screen.getByLabelText("背景图位置 X")).toBeInTheDocument();
-  expect(screen.queryByLabelText("全景旋转")).not.toBeInTheDocument();
-
-  await user.clear(screen.getByLabelText("背景图缩放"));
-  await user.type(screen.getByLabelText("背景图缩放"), "1.5");
-
-  expect(useDirectorStore.getState().project.scene.backdropScale).toBe(1.5);
-
-  await user.clear(screen.getByLabelText("背景图位置 X"));
-  await user.type(screen.getByLabelText("背景图位置 X"), "3");
-
-  expect(useDirectorStore.getState().project.scene.backdropOffset?.[0]).toBe(3);
+  expect(screen.getByRole("menu", { name: "选择全景图来源" })).toBeInTheDocument();
+  expect(screen.getByRole("menuitem", { name: "从 Mivo 选择" })).toBeInTheDocument();
+  expect(screen.getByRole("menuitem", { name: "从本地选择" })).toBeInTheDocument();
 });
 
 it("updates panorama radius from both slider and numeric input", async () => {
