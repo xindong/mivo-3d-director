@@ -162,6 +162,23 @@ it("selects the active camera object when switching to the camera view", () => {
   expect(restored.selectedObjectId).toBe("cam_object_1");
 });
 
+it("clears every selection when switching back to the director view", () => {
+  useDirectorStore.getState().selectObject("char_default_a");
+  useDirectorStore.getState().setViewMode("camera");
+
+  expect(useDirectorStore.getState().selectedObjectIds).toEqual(["char_default_a", "cam_object_1"]);
+
+  useDirectorStore.getState().setViewMode("director");
+
+  const state = useDirectorStore.getState();
+
+  expect(state.viewMode).toBe("director");
+  expect(state.selectedObjectId).toBeNull();
+  expect(state.selectedObjectIds).toEqual([]);
+  expect(state.selectedCrowdId).toBeNull();
+  expect(selectRightPanelKind(state)).toBe("scene");
+});
+
 it("keeps the camera selected when empty space is clicked in the camera view", () => {
   useDirectorStore.getState().setViewMode("camera");
   useDirectorStore.getState().openSceneInspector();

@@ -1345,21 +1345,31 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
         ...state,
         viewportPanelsCollapsed: collapsed,
       })),
+    /**
+     * Selection rules for the two view modes (keep them symmetric):
+     * - camera view  -> the camera backing the current shot becomes the primary selection,
+     *                   so the tree highlights it and the choice survives a reload.
+     * - director view-> the free camera: every selection is dropped (scene inspector shows).
+     */
     setViewMode: (mode) =>
       commitUiMutation((state) => {
-        const activeCameraId =
-          mode === "camera"
-            ? state.project.activeCameraId ?? state.project.cameras[0]?.id ?? null
-            : state.project.activeCameraId;
+        if (mode === "director") {
+          return {
+            ...state,
+            viewMode: mode,
+            selectedObjectId: null,
+            selectedObjectIds: [],
+            selectedCrowdId: null,
+            directorInspectorMode: "auto",
+          };
+        }
 
-        // Switching to the camera view also selects that camera in the scene tree, so the
-        // left list highlights it (and the choice survives a refresh).
-        const cameraObject =
-          mode === "camera" && activeCameraId
-            ? state.project.objects.find(
-                (item) => item.kind === "camera" && item.linkedCameraId === activeCameraId
-              )
-            : undefined;
+        const activeCameraId = state.project.activeCameraId ?? state.project.cameras[0]?.id ?? null;
+        const cameraObject = activeCameraId
+          ? state.project.objects.find(
+              (item) => item.kind === "camera" && item.linkedCameraId === activeCameraId
+            )
+          : undefined;
 
         if (!cameraObject) {
           return {
@@ -1470,10 +1480,13 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
           },
         };
       }),
+    /**
+     * Clicking empty space opens the scene inspector.
+     * - camera view  -> only switch the inspector, the camera selection stays (it is persisted).
+     * - director view-> also clear the selection, matching the "free camera" semantics.
+     */
     openSceneInspector: () =>
       commitUiMutation((state) => {
-        // Camera view keeps its camera selected: clicking empty space only opens the scene
-        // panel, it must not wipe the tree highlight (which is persisted).
         if (state.viewMode === "camera") {
           return { ...state, directorInspectorMode: "scene" };
         }
