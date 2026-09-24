@@ -24,6 +24,10 @@ export default {
 };
 
 async function proxyToMivo(request, url) {
+  // <img>/<video> cannot send an Authorization header, so allow ?access_token=... for media.
+  const queryToken = url.searchParams.get("access_token");
+  if (queryToken) url.searchParams.delete("access_token");
+
   const targetPath = url.pathname.slice(PROXY_PREFIX.length) || "/";
   const target = new URL(`${targetPath}${url.search}`, MIVO_ORIGIN);
   const headers = new Headers(request.headers);
@@ -31,6 +35,10 @@ async function proxyToMivo(request, url) {
   headers.delete("host");
   headers.delete("origin");
   headers.delete("referer");
+
+  if (queryToken && !headers.has("authorization")) {
+    headers.set("authorization", `Bearer ${queryToken}`);
+  }
 
   const canHaveBody = request.method !== "GET" && request.method !== "HEAD";
 

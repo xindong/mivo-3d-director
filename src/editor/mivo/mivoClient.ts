@@ -83,7 +83,7 @@ function pickItemArray(payload: unknown): JsonRecord[] {
   return [];
 }
 
-function mapAsset(item: JsonRecord): MivoAsset {
+function mapAsset(item: JsonRecord, session?: string): MivoAsset {
   const fileId = toStringValue(item.fileId ?? item.file_id ?? item._id ?? item.id);
   const thumbnail = toStringValue(item.thumbnail ?? item.thumb ?? item.image);
   const url = toStringValue(item.url ?? item.image ?? item.fullUrl ?? item.thumbnail);
@@ -91,7 +91,9 @@ function mapAsset(item: JsonRecord): MivoAsset {
   return {
     fileId,
     name: toStringValue(item.name ?? item.title ?? item.fileName) || fileId,
-    thumbnail: withEndpoint(thumbnail),
+    thumbnail: thumbnail
+      ? `${withEndpoint(thumbnail)}${session ? `${withEndpoint(thumbnail).includes("?") ? "&" : "?"}access_token=${encodeURIComponent(session)}` : ""}`
+      : "",
     url: withEndpoint(url),
     contentType: toStringValue(item.contentType ?? item.content_type),
     fileType: toStringValue(item.fileType ?? item.file_type),
@@ -204,7 +206,9 @@ export async function fetchMivoAssets(
     throw new Error(response.status === 401 ? "登录已过期，请重新连接 Mivo" : `获取资源失败（HTTP ${response.status}）`);
   }
 
-  return pickItemArray(unwrap(await readJson(response))).map(mapAsset).filter((asset) => asset.fileId);
+  return pickItemArray(unwrap(await readJson(response)))
+    .map((item) => mapAsset(item, session))
+    .filter((asset) => asset.fileId);
 }
 
 export async function downloadMivoAsset(session: string, asset: MivoAsset): Promise<File> {

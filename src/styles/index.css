@@ -3703,20 +3703,33 @@ textarea:focus-visible {
   transform: translate(-50%, -50%);
 }
 
-.panorama-empty-local {
+.panorama-empty-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.panorama-empty-primary {
+  color: rgb(var(--text-rgb));
+}
+
+.panorama-empty-sep {
+  color: rgb(var(--text-dim-rgb));
+}
+
+.panorama-empty-link {
   border: 0;
   padding: 0;
-  color: rgb(var(--text-dim-rgb));
+  color: rgb(var(--text-muted-rgb));
   background: transparent;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 17px;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  font: inherit;
   cursor: pointer;
 }
 
-.panorama-empty-local:hover {
+.panorama-empty-link:hover {
   color: rgb(var(--text-rgb));
 }
 

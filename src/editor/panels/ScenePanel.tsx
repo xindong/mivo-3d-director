@@ -368,17 +368,22 @@ export function ScenePanel() {
             <span className="panorama-empty-icon" data-testid="panorama-empty-icon">
               <ImageOff aria-hidden="true" size={16} strokeWidth={1.8} />
             </span>
-            <span className="panorama-empty-title">从 Mivo 选择</span>
-            <button
-              className="panorama-empty-hint panorama-empty-local"
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                openLocalPanoramaPicker();
-              }}
-            >
-              从本地选择
-            </button>
+            <span className="panorama-empty-actions">
+              <span className="panorama-empty-primary">从 Mivo 选择</span>
+              <span aria-hidden="true" className="panorama-empty-sep">
+                /
+              </span>
+              <button
+                className="panorama-empty-link"
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openLocalPanoramaPicker();
+                }}
+              >
+                从本地选择
+              </button>
+            </span>
           </div>
         )}
         {panoramaError ? <p className="capture-status">{panoramaError}</p> : null}
