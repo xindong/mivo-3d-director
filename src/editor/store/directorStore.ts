@@ -532,11 +532,27 @@ function sanitizeRestoredState(state: DirectorState): DirectorState {
   const crowdIds = new Set(
     project.objects.map((item) => item.crowdId).filter((crowdId): crowdId is string => typeof crowdId === "string")
   );
-  const selectedObjectIds = state.selectedObjectIds.filter((id) => objectIds.has(id));
-  const selectedObjectId =
+  let selectedObjectIds = state.selectedObjectIds.filter((id) => objectIds.has(id));
+  let selectedObjectId =
     state.selectedObjectId && objectIds.has(state.selectedObjectId)
       ? state.selectedObjectId
       : selectedObjectIds[selectedObjectIds.length - 1] ?? null;
+
+  // Camera view must highlight its camera, without stealing the primary selection from a
+  // role/model the user had picked.
+  if (state.viewMode === "camera") {
+    const cameraObject = project.objects.find(
+      (item) => item.kind === "camera" && item.linkedCameraId === project.activeCameraId
+    );
+    const hasCameraSelection = selectedObjectIds.some(
+      (id) => project.objects.find((item) => item.id === id)?.kind === "camera"
+    );
+
+    if (cameraObject && !hasCameraSelection) {
+      selectedObjectIds = [...selectedObjectIds, cameraObject.id];
+      selectedObjectId = selectedObjectId ?? cameraObject.id;
+    }
+  }
 
   return {
     ...state,
@@ -1330,17 +1346,41 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
         viewportPanelsCollapsed: collapsed,
       })),
     setViewMode: (mode) =>
-      commitUiMutation((state) => ({
-        ...state,
-        viewMode: mode,
-        project: {
-          ...state.project,
-          activeCameraId:
-            mode === "camera"
-              ? state.project.activeCameraId ?? state.project.cameras[0]?.id ?? null
-              : state.project.activeCameraId,
-        },
-      })),
+      commitUiMutation((state) => {
+        const activeCameraId =
+          mode === "camera"
+            ? state.project.activeCameraId ?? state.project.cameras[0]?.id ?? null
+            : state.project.activeCameraId;
+
+        // Switching to the camera view also selects that camera in the scene tree, so the
+        // left list highlights it (and the choice survives a refresh).
+        const cameraObject =
+          mode === "camera" && activeCameraId
+            ? state.project.objects.find(
+                (item) => item.kind === "camera" && item.linkedCameraId === activeCameraId
+              )
+            : undefined;
+
+        if (!cameraObject) {
+          return {
+            ...state,
+            viewMode: mode,
+            project: { ...state.project, activeCameraId },
+          };
+        }
+
+        const selectedObjectIds = getOrderedSelectedObjectIds(state);
+
+        return {
+          ...state,
+          viewMode: mode,
+          selectedObjectId: cameraObject.id,
+          selectedObjectIds: selectedObjectIds.includes(cameraObject.id)
+            ? selectedObjectIds
+            : [...selectedObjectIds, cameraObject.id],
+          project: { ...state.project, activeCameraId },
+        };
+      }),
     selectObject: (id) =>
       commitUiMutation((state) => {
         const selectedObject = state.project.objects.find((item) => item.id === id);

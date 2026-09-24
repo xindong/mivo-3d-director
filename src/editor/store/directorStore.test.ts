@@ -143,6 +143,67 @@ it("repairs a corrupted persisted scene instead of restoring an unusable one", (
   expect(restored.project.scene.position).toEqual([0, 0, 0]);
 });
 
+it("selects the active camera object when switching to the camera view", () => {
+  useDirectorStore.getState().selectObject("char_default_a");
+  useDirectorStore.getState().setViewMode("camera");
+
+  const state = useDirectorStore.getState();
+
+  expect(state.viewMode).toBe("camera");
+  expect(state.selectedObjectId).toBe("cam_object_1");
+  expect(state.selectedObjectIds).toEqual(["char_default_a", "cam_object_1"]);
+
+  // ...and the highlight survives a reload.
+  useDirectorStore.getState().saveLatestSnapshot();
+
+  const restored = createInitialDirectorState({ includePersistedScene: true });
+
+  expect(restored.viewMode).toBe("camera");
+  expect(restored.selectedObjectId).toBe("cam_object_1");
+});
+
+it("highlights the active camera when a restored scene is already in camera view", () => {
+  localStorage.setItem(
+    "storyai-3d-director-desk-demo",
+    JSON.stringify({
+      viewMode: "camera",
+      selectedObjectId: null,
+      selectedObjectIds: [],
+      project: {
+        version: 1,
+        scene: { backgroundColor: "#000000" },
+        assets: [],
+        objects: [
+          {
+            id: "cam_object_9",
+            name: "机位09",
+            kind: "camera",
+            visible: true,
+            locked: false,
+            linkedCameraId: "cam_9",
+            transform: { position: [0, 1, 5], rotation: [0, 0, 0], scale: [1, 1, 1] },
+          },
+        ],
+        cameras: [
+          {
+            id: "cam_9",
+            name: "机位09",
+            fov: 50,
+            transform: { position: [0, 1, 5], rotation: [0, 0, 0], scale: [1, 1, 1] },
+            target: [0, 1, 0],
+          },
+        ],
+        activeCameraId: "cam_9",
+      },
+    })
+  );
+
+  const restored = createInitialDirectorState({ includePersistedScene: true });
+
+  expect(restored.selectedObjectId).toBe("cam_object_9");
+  expect(restored.selectedObjectIds).toContain("cam_object_9");
+});
+
 it("keeps camera and object selections independent and persists both", () => {
   useDirectorStore.getState().selectObject("char_default_a");
   useDirectorStore.getState().focusObject("cam_object_1");
