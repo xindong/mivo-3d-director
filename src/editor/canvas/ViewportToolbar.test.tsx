@@ -54,6 +54,7 @@ it("renders the viewport capsule as project icon-system buttons", () => {
 
   const toolbar = screen.getByRole("group", { name: "3D视口快捷工具" });
   const expectedActions = [
+    "连接 Mivo",
     "移动",
     "旋转",
     "缩放",
@@ -71,7 +72,12 @@ it("renders the viewport capsule as project icon-system buttons", () => {
   expectedActions.forEach((label) => {
     const button = within(toolbar).getByRole("button", { name: label });
 
-    expect(button.querySelector("svg")).toBeInTheDocument();
+    if (label === "连接 Mivo") {
+      expect(button.querySelector("img")).toBeInTheDocument();
+    } else {
+      expect(button.querySelector("svg")).toBeInTheDocument();
+    }
+
     expect(button).toHaveClass("viewport-toolbar-button");
   });
 
@@ -81,7 +87,7 @@ it("renders the viewport capsule as project icon-system buttons", () => {
     button.getAttribute("aria-label")
   );
   expect(toolbarButtonLabels).toEqual(expectedActions);
-  expect(toolbar.querySelectorAll(".viewport-toolbar-divider")).toHaveLength(3);
+  expect(toolbar.querySelectorAll(".viewport-toolbar-divider")).toHaveLength(4);
 });
 
 it("renders custom hover labels instead of native title tooltips", () => {

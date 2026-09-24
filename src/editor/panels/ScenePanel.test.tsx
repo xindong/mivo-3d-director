@@ -177,7 +177,7 @@ it("renders the disconnected panorama state as a fixed-size dark card", async ()
   expect(panoramaStatus).toHaveTextContent("未连接全景图");
 });
 
-it("opens the panorama file picker when the panorama card is clicked", async () => {
+it("opens the panorama source menu and the local picker from the card", async () => {
   const user = userEvent.setup();
   render(<ScenePanel />);
 
@@ -188,7 +188,22 @@ it("opens the panorama file picker when the panorama card is clicked", async () 
 
   await user.click(screen.getByLabelText("全景图连接状态"));
 
+  expect(screen.getByRole("menu", { name: "选择全景图来源" })).toBeInTheDocument();
+
+  await user.click(screen.getByRole("menuitem", { name: "从本地选择" }));
+
   expect(clickSpy).toHaveBeenCalledTimes(1);
+});
+
+it("asks to connect Mivo before opening the Mivo panorama picker", async () => {
+  const user = userEvent.setup();
+  render(<ScenePanel />);
+
+  await user.click(screen.getByRole("button", { name: "全景" }));
+  await user.click(screen.getByLabelText("全景图连接状态"));
+  await user.click(screen.getByRole("menuitem", { name: "从 Mivo 选择" }));
+
+  expect(screen.getByRole("dialog", { name: "连接 Mivo" })).toBeInTheDocument();
 });
 
 it("switches the panorama between the orb and a camera-locked backdrop", async () => {

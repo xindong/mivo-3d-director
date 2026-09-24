@@ -351,6 +351,11 @@ function DraftNumberInput({
   const [draft, setDraft] = useState<string | null>(null);
   const currentValue = draft ?? String(value);
 
+  // External updates (slider drag, reset, preset) must win over an in-flight draft.
+  useEffect(() => {
+    setDraft(null);
+  }, [value]);
+
   function nudge(direction: 1 | -1) {
     const parsedStep = parseFiniteNumber(step) ?? 1;
     const parsedValue = parseFiniteNumber(currentValue) ?? parseFiniteNumber(value) ?? 0;

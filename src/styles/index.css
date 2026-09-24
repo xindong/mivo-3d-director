@@ -3358,3 +3358,357 @@ textarea:focus-visible {
     max-width: calc(100% - 32px);
   }
 }
+
+/* ==================== Mivo 连接与资源选择 ==================== */
+.mivo-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.mivo-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 100%);
+  max-height: min(80vh, 720px);
+  border: 1px solid rgb(var(--border-rgb) / 0.9);
+  border-radius: 16px;
+  background: #262626;
+  color: rgb(var(--text-rgb));
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.45);
+  overflow: hidden;
+}
+
+.mivo-picker {
+  width: min(816px, 100%);
+}
+
+.mivo-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 14px;
+}
+
+.mivo-dialog-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.mivo-dialog-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  color: rgb(255 255 255 / 0.6);
+  background: transparent;
+  cursor: pointer;
+}
+
+.mivo-dialog-close:hover {
+  color: #ffffff;
+  background: rgb(255 255 255 / 0.1);
+}
+
+.mivo-dialog-body {
+  display: grid;
+  gap: 14px;
+  padding: 0 20px 20px;
+}
+
+.mivo-dialog-hint,
+.mivo-picker-hint,
+.mivo-dialog-meta {
+  margin: 0;
+  color: rgb(255 255 255 / 0.5);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.mivo-dialog-error {
+  margin: 0;
+  color: #ff7a7a;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.mivo-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.mivo-field {
+  display: grid;
+  gap: 8px;
+}
+
+.mivo-field-label {
+  color: rgb(255 255 255 / 0.5);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.mivo-input {
+  height: 40px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #ffffff;
+  background: #1a1a1a;
+  font-size: 14px;
+  outline: none;
+}
+
+.mivo-input:focus {
+  border-color: #745ef5;
+  box-shadow: 0 0 0 2px rgb(116 94 245 / 0.25);
+}
+
+.mivo-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 8px;
+  padding: 0 16px;
+  color: #ffffff;
+  background: rgb(255 255 255 / 0.06);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, opacity 0.16s ease;
+}
+
+.mivo-button:hover:not(:disabled) {
+  border-color: #745ef5;
+}
+
+.mivo-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mivo-button-primary {
+  border-color: transparent;
+  background: #745ef5;
+}
+
+.mivo-button-danger {
+  border-color: rgb(255 122 122 / 0.4);
+  color: #ff9a9a;
+}
+
+.mivo-button-ghost {
+  background: transparent;
+}
+
+.mivo-logo-mark {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: #745ef5;
+}
+
+.mivo-logo-button.is-connected .mivo-logo-mark {
+  color: #745ef5;
+}
+
+.mivo-logo-button.is-connected {
+  border-color: rgb(116 94 245 / 0.55);
+  color: #ffffff;
+  background: rgb(116 94 245 / 0.18);
+}
+
+.mivo-spin {
+  animation: mivo-spin 1s linear infinite;
+}
+
+@keyframes mivo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mivo-picker-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 20px 14px;
+}
+
+.mivo-picker-tabs {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.mivo-picker-tab {
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: rgb(255 255 255 / 0.6);
+  background: rgb(255 255 255 / 0.04);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mivo-picker-tab.is-active {
+  border-color: #745ef5;
+  color: #ffffff;
+  background: rgb(116 94 245 / 0.2);
+}
+
+.mivo-picker-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 8px;
+  color: rgb(255 255 255 / 0.5);
+  background: #1a1a1a;
+}
+
+.mivo-picker-search-input {
+  height: 32px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mivo-picker-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 20px;
+  overflow-y: auto;
+}
+
+.mivo-picker-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 180px;
+  color: rgb(255 255 255 / 0.5);
+  font-size: 13px;
+}
+
+.mivo-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  padding-bottom: 4px;
+}
+
+.mivo-picker-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 6px;
+  color: rgb(255 255 255 / 0.7);
+  background: rgb(255 255 255 / 0.04);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mivo-picker-card:hover {
+  background: rgb(255 255 255 / 0.08);
+}
+
+.mivo-picker-card.is-selected {
+  border-color: #745ef5;
+  background: rgb(116 94 245 / 0.16);
+}
+
+.mivo-picker-thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #1a1a1a;
+}
+
+.mivo-picker-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mivo-picker-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: #745ef5;
+}
+
+.mivo-picker-name {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mivo-picker-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px 18px;
+}
+
+.panorama-source-menu {
+  display: grid;
+  gap: 6px;
+  width: var(--right-sidebar-content-width);
+  max-width: 100%;
+  border: 1px solid rgb(var(--border-rgb) / 0.9);
+  border-radius: 8px;
+  padding: 6px;
+  background: rgb(var(--surface-rgb));
+}
+
+.panorama-source-item {
+  height: 36px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 12px;
+  color: rgb(var(--text-rgb) / 0.75);
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.panorama-source-item:hover {
+  color: #ffffff;
+  background: rgb(var(--accent-rgb) / 0.18);
+}

@@ -6,6 +6,10 @@ import {
   InspectorRangeNumberField,
 } from "./InspectorControls";
 import { readPanoramaFile } from "../loaders/panoramaImport";
+import { downloadMivoAsset, type MivoAsset } from "../mivo/mivoClient";
+import { useMivoStore } from "../mivo/mivoStore";
+import { MivoAssetPicker } from "./MivoAssetPicker";
+import { MivoConnectDialog } from "./MivoConnectDialog";
 import { useDirectorStore } from "../store/directorStore";
 
 const PANORAMA_RADIUS_MIN = 10;
@@ -52,6 +56,9 @@ export function ScenePanel() {
   const removePanoramaAsset = useDirectorStore((state) => state.removePanoramaAsset);
   const panoramaInputRef = useRef<HTMLInputElement>(null);
   const [panoramaError, setPanoramaError] = useState<string | null>(null);
+  const [panoramaSourceMenuOpen, setPanoramaSourceMenuOpen] = useState(false);
+  const [mivoPanoramaPickerOpen, setMivoPanoramaPickerOpen] = useState(false);
+  const [mivoConnectOpen, setMivoConnectOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<SceneTabKey>("scene");
   const [sceneScaleDraft, setSceneScaleDraft] = useState(String(scene.scale));
   const [panoramaYawDraft, setPanoramaYawDraft] = useState(String(scene.panoramaYaw));
@@ -108,15 +115,48 @@ export function ScenePanel() {
     setGroundHeightDraft(String(nextHeight));
   }
 
-  function openPanoramaPicker() {
+  function openPanoramaSourceMenu() {
+    setPanoramaSourceMenuOpen((isOpen) => !isOpen);
+  }
+
+  function openLocalPanoramaPicker() {
+    setPanoramaSourceMenuOpen(false);
     panoramaInputRef.current?.click();
+  }
+
+  function openMivoPanoramaPicker() {
+    setPanoramaSourceMenuOpen(false);
+
+    if (useMivoStore.getState().status === "connected") {
+      setMivoPanoramaPickerOpen(true);
+      return;
+    }
+
+    setMivoConnectOpen(true);
+  }
+
+  async function applyPanoramaFromMivo(assets: MivoAsset[]) {
+    const session = useMivoStore.getState().getSession();
+    const asset = assets[0];
+
+    if (!session || !asset) throw new Error("尚未连接 Mivo");
+
+    const file = await downloadMivoAsset(session, asset);
+    const result = await readPanoramaFile(file);
+
+    if (panoramaAsset) {
+      removePanoramaAsset();
+    }
+
+    addImportedAsset({ kind: "panorama", ...result });
+    setPanoramaError(null);
   }
 
   function handlePanoramaCardKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
     if (event.key !== "Enter" && event.key !== " ") return;
 
     event.preventDefault();
-    openPanoramaPicker();
+    openPanoramaSourceMenu();
   }
 
   async function importPanorama(file: File) {
@@ -273,7 +313,7 @@ export function ScenePanel() {
             role="button"
             tabIndex={0}
             aria-label="全景图缩略图卡片"
-            onClick={openPanoramaPicker}
+            onClick={openPanoramaSourceMenu}
             onKeyDown={handlePanoramaCardKeyDown}
           >
             <button
@@ -296,7 +336,7 @@ export function ScenePanel() {
             role="button"
             tabIndex={0}
             aria-label="全景图连接状态"
-            onClick={openPanoramaPicker}
+            onClick={openPanoramaSourceMenu}
             onKeyDown={handlePanoramaCardKeyDown}
           >
             <span className="panorama-empty-icon" data-testid="panorama-empty-icon">
@@ -306,6 +346,16 @@ export function ScenePanel() {
             <span className="panorama-empty-hint">点击上传</span>
           </div>
         )}
+        {panoramaSourceMenuOpen ? (
+          <div className="panorama-source-menu" role="menu" aria-label="选择全景图来源">
+            <button className="panorama-source-item" role="menuitem" type="button" onClick={openMivoPanoramaPicker}>
+              从 Mivo 选择
+            </button>
+            <button className="panorama-source-item" role="menuitem" type="button" onClick={openLocalPanoramaPicker}>
+              从本地选择
+            </button>
+          </div>
+        ) : null}
         {panoramaError ? <p className="capture-status">{panoramaError}</p> : null}
         <div className="inspector-field">
           <span className="inspector-field-label">显示方式</span>
@@ -490,6 +540,14 @@ export function ScenePanel() {
           </div>
         </section>
       ) : null}
+      <MivoConnectDialog open={mivoConnectOpen} onClose={() => setMivoConnectOpen(false)} />
+      <MivoAssetPicker
+        kind="image"
+        maxCount={1}
+        open={mivoPanoramaPickerOpen}
+        onApply={applyPanoramaFromMivo}
+        onClose={() => setMivoPanoramaPickerOpen(false)}
+      />
     </InspectorPanel>
   );
 }

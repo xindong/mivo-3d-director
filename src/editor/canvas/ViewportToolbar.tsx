@@ -30,6 +30,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { requestViewportCapture } from "../io/captureBridge";
+import { downloadMivoAsset, type MivoAsset } from "../mivo/mivoClient";
+import { useMivoStore } from "../mivo/mivoStore";
+import { MivoAssetPicker } from "../panels/MivoAssetPicker";
+import { MivoConnectDialog } from "../panels/MivoConnectDialog";
+import mivoLogoUrl from "../../assets/mivo-logo.svg";
 import { LOCAL_MODEL_ACCEPT, readLocalModelFile } from "../loaders/localModelImport";
 import { readPanoramaFile } from "../loaders/panoramaImport";
 import {
@@ -111,6 +116,9 @@ export function ViewportToolbar({
   const [geometryMenuOpen, setGeometryMenuOpen] = useState(false);
   const [crowdPanelOpen, setCrowdPanelOpen] = useState(false);
   const [modelLibraryOpen, setModelLibraryOpen] = useState(false);
+  const [modelImportMenuOpen, setModelImportMenuOpen] = useState(false);
+  const [mivoConnectOpen, setMivoConnectOpen] = useState(false);
+  const [mivoModelPickerOpen, setMivoModelPickerOpen] = useState(false);
   const [aspectRatioPanelOpen, setAspectRatioPanelOpen] = useState(false);
   const [toolbarHeight, setToolbarHeight] = useState(DEFAULT_VIEWPORT_TOOLBAR_HEIGHT);
   const [characterMenuStyle, setCharacterMenuStyle] = useState<CSSProperties>({});
@@ -142,6 +150,7 @@ export function ViewportToolbar({
   const resetDirectorScene = useDirectorStore((state) => state.resetDirectorScene);
   const setActiveCamera = useDirectorStore((state) => state.setActiveCamera);
   const setCameraInspectorTab = useDirectorStore((state) => state.setCameraInspectorTab);
+  const mivoConnected = useMivoStore((state) => state.status === "connected");
 
   useEffect(() => {
     if (!characterMenuOpen && !crowdPanelOpen && !modelLibraryOpen && !aspectRatioPanelOpen) return;
@@ -336,6 +345,19 @@ export function ViewportToolbar({
     }
   }
 
+  async function importModelsFromMivo(assets: MivoAsset[]) {
+    const session = useMivoStore.getState().getSession();
+
+    if (!session) throw new Error("尚未连接 Mivo");
+
+    for (const asset of assets) {
+      const file = await downloadMivoAsset(session, asset);
+      const result = await readLocalModelFile(file);
+
+      addImportedAsset({ kind: "prop", ...result });
+    }
+  }
+
   function selectTransformMode(mode: TransformMode) {
     setTransformMode(mode);
   }
@@ -459,9 +481,7 @@ export function ViewportToolbar({
       group: "add",
       label: "导入本地模型",
       icon: Box,
-      onClick: () => {
-        sceneLocalModelInputRef.current?.click();
-      },
+      onClick: () => setModelImportMenuOpen((isOpen) => !isOpen),
     },
     { group: "add", label: "添加机位", icon: Video, onClick: addCameraFromViewport },
     { group: "capture", label: "选择画幅比例", icon: Ratio, onClick: toggleAspectRatioPanel },
@@ -529,8 +549,62 @@ export function ViewportToolbar({
   return (
     <>
       <div className="viewport-toolbar" role="group" aria-label="3D视口快捷工具" ref={setToolbarElement}>
+        <button
+          aria-expanded={mivoConnectOpen}
+          aria-label={mivoConnected ? "Mivo 已连接" : "连接 Mivo"}
+          className={`ui-icon-button viewport-toolbar-button mivo-logo-button${mivoConnected ? " is-connected" : ""}`}
+          type="button"
+          onClick={() => {
+            setModelImportMenuOpen(false);
+            setMivoConnectOpen(true);
+          }}
+        >
+          <img alt="" aria-hidden="true" className="mivo-logo-mark" src={mivoLogoUrl} />
+          <span className="viewport-toolbar-label">Mivo</span>
+        </button>
+        <span className="viewport-toolbar-divider" aria-hidden="true" />
         {renderToolbarActions()}
       </div>
+      {modelImportMenuOpen ? (
+        <div className="viewport-toolbar-menu" role="menu" aria-label="选择模型来源" style={characterMenuStyle}>
+          <button
+            className="viewport-toolbar-menu-item"
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              setModelImportMenuOpen(false);
+
+              if (useMivoStore.getState().status === "connected") {
+                setMivoModelPickerOpen(true);
+                return;
+              }
+
+              setMivoConnectOpen(true);
+            }}
+          >
+            <span>从 Mivo 选择</span>
+          </button>
+          <button
+            className="viewport-toolbar-menu-item"
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              setModelImportMenuOpen(false);
+              sceneLocalModelInputRef.current?.click();
+            }}
+          >
+            <span>从本地选择</span>
+          </button>
+        </div>
+      ) : null}
+      <MivoConnectDialog open={mivoConnectOpen} onClose={() => setMivoConnectOpen(false)} />
+      <MivoAssetPicker
+        kind="model"
+        maxCount={10}
+        open={mivoModelPickerOpen}
+        onApply={importModelsFromMivo}
+        onClose={() => setMivoModelPickerOpen(false)}
+      />
       {characterMenuOpen ? (
         <div
           ref={characterMenuRef}
