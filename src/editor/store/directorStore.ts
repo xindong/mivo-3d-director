@@ -1482,19 +1482,13 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
           : [...selectedObjectIds, id];
         const nextSelectedObjectId = nextSelectedObjectIds[nextSelectedObjectIds.length - 1] ?? null;
 
+        // Cameras return early above, so this branch never changes the active camera.
         return {
           ...state,
           selectedObjectId: nextSelectedObjectId,
           selectedObjectIds: nextSelectedObjectIds,
           selectedCrowdId: null,
           directorInspectorMode: "auto",
-          project: {
-            ...state.project,
-            activeCameraId:
-              selectedObject.kind === "camera" && selectedObject.linkedCameraId
-                ? selectedObject.linkedCameraId
-                : state.project.activeCameraId,
-          },
         };
       }),
     /**
