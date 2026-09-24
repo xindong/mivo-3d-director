@@ -59,7 +59,7 @@ it("renders the viewport capsule as project icon-system buttons", () => {
     "旋转",
     "缩放",
     "添加角色",
-    "导入本地模型",
+    "导入模型",
     "添加机位",
     "选择画幅比例",
     "当前视角截图",
@@ -94,8 +94,8 @@ it("renders custom hover labels instead of native title tooltips", () => {
   render(<ViewportToolbar />);
 
   const toolbar = screen.getByRole("group", { name: "3D视口快捷工具" });
-  const button = within(toolbar).getByRole("button", { name: "导入本地模型" });
-  const label = within(button).getByText("导入本地模型");
+  const button = within(toolbar).getByRole("button", { name: "导入模型" });
+  const label = within(button).getByText("导入模型");
 
   expect(button).not.toHaveAttribute("title");
   expect(label).toHaveClass("viewport-toolbar-label");
@@ -400,7 +400,9 @@ it("still imports a local model directly into the scene from the viewport capsul
   });
   render(<ViewportToolbar />);
 
-  await user.click(screen.getByRole("button", { name: "导入本地模型" }));
+  // The capsule button now opens a source menu; the local entry still uses the same file input.
+  await user.click(screen.getByRole("button", { name: "导入模型" }));
+  await user.click(screen.getByRole("menuitem", { name: "从本地选择" }));
 
   const fileInput = screen.getByTestId("scene-local-model-input") as HTMLInputElement | null;
   expect(fileInput).not.toBeNull();

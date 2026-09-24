@@ -91,10 +91,14 @@ function mapAsset(item: JsonRecord, session?: string): MivoAsset {
   return {
     fileId,
     name: toStringValue(item.name ?? item.title ?? item.fileName) || fileId,
-    thumbnail: thumbnail
-      ? `${withEndpoint(thumbnail)}${session ? `${withEndpoint(thumbnail).includes("?") ? "&" : "?"}access_token=${encodeURIComponent(session)}` : ""}`
-      : "",
-    url: withEndpoint(url),
+    thumbnail: (() => {
+      if (!thumbnail) return "";
+
+      const proxied = withEndpoint(normalizeMivoFileApiPath(thumbnail));
+
+      return session ? `${proxied}${proxied.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(session)}` : proxied;
+    })(),
+    url: withEndpoint(normalizeMivoFileApiPath(url)),
     contentType: toStringValue(item.contentType ?? item.content_type),
     fileType: toStringValue(item.fileType ?? item.file_type),
     createTime: toStringValue(item.createTime ?? item.create_time ?? item.createdAt),
@@ -115,6 +119,16 @@ async function readJson(response: Response) {
 
 function isSameOriginAssetUrl(url: string) {
   return url.startsWith("/");
+}
+
+/**
+ * The asset list returns "/file/thumbnail/<id>", but the API only answers under
+ * "/api/v1/file/...". Normalise every file path we receive.
+ */
+function normalizeMivoFileApiPath(value: string): string {
+  const match = value.match(/^\/?(?:api\/v1\/)?file\/(thumbnail|image|download)\/([A-Za-z0-9_-]+)$/);
+
+  return match ? `/api/v1/file/${match[1]}/${match[2]}` : value;
 }
 
 function withEndpoint(path: string) {

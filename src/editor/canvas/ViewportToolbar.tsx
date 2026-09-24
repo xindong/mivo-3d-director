@@ -479,7 +479,7 @@ export function ViewportToolbar({
     { group: "add", label: "添加角色", icon: UserPlus, onClick: toggleCharacterMenu },
     {
       group: "add",
-      label: "导入本地模型",
+      label: "导入模型",
       icon: Box,
       onClick: () => setModelImportMenuOpen((isOpen) => !isOpen),
     },
@@ -566,7 +566,7 @@ export function ViewportToolbar({
         {renderToolbarActions()}
       </div>
       {modelImportMenuOpen ? (
-        <div className="viewport-toolbar-menu" role="menu" aria-label="选择模型来源" style={characterMenuStyle}>
+        <div className="viewport-toolbar-menu" role="menu" aria-label="选择模型来源">
           <button
             className="viewport-toolbar-menu-item"
             role="menuitem"
