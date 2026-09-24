@@ -327,7 +327,7 @@ export function ViewportToolbar({
       });
       addCameraCaptures(targetCameraId, results.map((result) => result.dataUrl));
 
-      if (preset === "current") {
+      if (preset === "current" && targetCameraId) {
         setActiveCamera(targetCameraId);
         setCameraInspectorTab("captures");
       }
