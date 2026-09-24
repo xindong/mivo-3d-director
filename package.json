@@ -15,6 +15,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:site": "npm run build && rm -rf deploy-root && mkdir -p deploy-root/public && cp -r dist/. deploy-root/public/ && cp worker/index.js deploy-root/worker.js",
     "test": "vitest run",
     "preview": "vite preview"
   },

@@ -1,4 +1,9 @@
-const MIVO_ENDPOINT = "https://aigc.xindong.com";
+/**
+ * All Mivo traffic goes through our own origin (`/api/mivo/*`), which the XD Sites worker
+ * (and the Vite dev proxy) forwards to the Mivo API. That keeps the browser same-origin,
+ * so no CORS negotiation is needed.
+ */
+const MIVO_ENDPOINT = "/api/mivo";
 const CREDENTIALS_STORAGE_KEY = "mivo-3d-director:mivo-credentials";
 
 export type MivoAssetKind = "model" | "image";
@@ -200,11 +205,11 @@ export async function downloadMivoAsset(session: string, asset: MivoAsset): Prom
   return new File([blob], asset.name, { type: blob.type || asset.contentType || "application/octet-stream" });
 }
 
-/** Cheap reachability probe used to turn a network/CORS failure into a readable message. */
+/** Cheap reachability probe used to turn a proxy/network failure into a readable message. */
 export async function probeMivoEndpoint(): Promise<boolean> {
   try {
-    await fetch(`${getEndpoint()}/api/v1/state/token`, { method: "HEAD", mode: "cors" });
-    return true;
+    const response = await fetch(`${MIVO_ENDPOINT}/api/v1/state/token`, { method: "HEAD" });
+    return response.status < 500;
   } catch {
     return false;
   }

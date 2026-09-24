@@ -9,6 +9,14 @@ export default defineConfig({
   assetsInclude: ["**/*.fbx", "**/*.obj"],
   plugins: [react()],
   server: {
+    proxy: {
+      // Same contract as the XD Sites worker: /api/mivo/* -> Mivo API (no CORS in dev).
+      "/api/mivo": {
+        target: "https://aigc.xindong.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/mivo/, ""),
+      },
+    },
     fs: {
       allow: [
         decodeURIComponent(new URL(".", import.meta.url).pathname),
