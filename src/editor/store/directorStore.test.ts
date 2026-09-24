@@ -162,6 +162,26 @@ it("selects the active camera object when switching to the camera view", () => {
   expect(restored.selectedObjectId).toBe("cam_object_1");
 });
 
+it("keeps the camera selected when empty space is clicked in the camera view", () => {
+  useDirectorStore.getState().setViewMode("camera");
+  useDirectorStore.getState().openSceneInspector();
+
+  let state = useDirectorStore.getState();
+
+  expect(state.directorInspectorMode).toBe("scene");
+  expect(state.selectedObjectId).toBe("cam_object_1");
+  expect(state.selectedObjectIds).toContain("cam_object_1");
+
+  // In director view the same click still clears the selection.
+  useDirectorStore.getState().setViewMode("director");
+  useDirectorStore.getState().openSceneInspector();
+
+  state = useDirectorStore.getState();
+
+  expect(state.selectedObjectId).toBeNull();
+  expect(state.selectedObjectIds).toEqual([]);
+});
+
 it("highlights the active camera when a restored scene is already in camera view", () => {
   localStorage.setItem(
     "storyai-3d-director-desk-demo",

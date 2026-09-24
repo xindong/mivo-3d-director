@@ -1471,13 +1471,21 @@ export const useDirectorStore = create<DirectorStore>((set, get) => {
         };
       }),
     openSceneInspector: () =>
-      commitUiMutation((state) => ({
-        ...state,
-        directorInspectorMode: "scene",
-        selectedObjectId: null,
-        selectedObjectIds: [],
-        selectedCrowdId: null,
-      })),
+      commitUiMutation((state) => {
+        // Camera view keeps its camera selected: clicking empty space only opens the scene
+        // panel, it must not wipe the tree highlight (which is persisted).
+        if (state.viewMode === "camera") {
+          return { ...state, directorInspectorMode: "scene" };
+        }
+
+        return {
+          ...state,
+          directorInspectorMode: "scene",
+          selectedObjectId: null,
+          selectedObjectIds: [],
+          selectedCrowdId: null,
+        };
+      }),
     updateScene: (patch) =>
       commitMutation((state) => ({
         ...state,
