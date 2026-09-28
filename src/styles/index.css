@@ -1952,6 +1952,15 @@ textarea:focus-visible {
   background: rgb(var(--text-rgb) / 0.08);
 }
 
+.viewport-toolbar-button.mivo-logo-button {
+  background: #745ef5;
+  overflow: hidden;
+}
+
+.viewport-toolbar-button.mivo-logo-button:hover {
+  background: #745ef5;
+}
+
 .viewport-toolbar-button.ui-icon-button.is-active,
 .viewport-toolbar-button.ui-icon-button[aria-pressed="true"] {
   color: rgb(var(--accent-rgb));
@@ -3602,8 +3611,8 @@ textarea:focus-visible {
 }
 
 .mivo-logo-mark {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
   object-fit: contain;
 }
