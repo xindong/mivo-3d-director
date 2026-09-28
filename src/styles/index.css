@@ -1953,12 +1953,7 @@ textarea:focus-visible {
 }
 
 .viewport-toolbar-button.mivo-logo-button {
-  background: #745ef5;
-  overflow: hidden;
-}
-
-.viewport-toolbar-button.mivo-logo-button:hover {
-  background: #745ef5;
+  background: transparent;
 }
 
 .viewport-toolbar-button.ui-icon-button.is-active,
