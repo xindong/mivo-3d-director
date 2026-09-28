@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { ImageOff, Trash2 } from "lucide-react";
+import { ImageOff, Loader2, Trash2, X } from "lucide-react";
+import { createPortal } from "react-dom";
 import {
   InspectorColorField,
   InspectorPanel,
@@ -30,6 +31,23 @@ const BACKDROP_SCALE_MAX = 3;
 const BACKDROP_OFFSET_MIN = -50;
 const BACKDROP_OFFSET_MAX = 50;
 
+const PANORAMA_PRESETS = [
+  { id: "venice_sunset", name: "威尼斯日落", author: "Greg Zaal" },
+  { id: "secluded_beach", name: "静谧海滩", author: "Greg Zaal" },
+  { id: "hochsal_forest", name: "高萨尔森林", author: "Adrian Kubasa" },
+  { id: "hotel_room", name: "酒店房间", author: "Greg Zaal" },
+  { id: "art_studio", name: "艺术工作室", author: "Oliksiy Yakovlyev" },
+  { id: "autumn_forest_01", name: "秋日森林", author: "Andreas Mischok" },
+  { id: "urban_street_01", name: "城市街景", author: "Andreas Mischok" },
+  { id: "snowy_forest_path_01", name: "雪林小径", author: "Oliksiy Yakovlyev" },
+  { id: "modern_buildings_night", name: "现代建筑夜景", author: "Greg Zaal" },
+  { id: "brown_photostudio_01", name: "暖棕摄影棚", author: "Sergej Majboroda" },
+] as const;
+
+function panoramaPresetPreview(id: string) {
+  return `/panoramas/thumbs/${id}-thumb.jpg`;
+}
+
 type SceneTabKey = "scene" | "panorama" | "ground" | "misc";
 
 const SCENE_TABS: Array<{ key: SceneTabKey; label: string }> = [
@@ -58,6 +76,8 @@ export function ScenePanel() {
   const [panoramaError, setPanoramaError] = useState<string | null>(null);
   const [panoramaSourceMenuOpen, setPanoramaSourceMenuOpen] = useState(false);
   const [mivoPanoramaPickerOpen, setMivoPanoramaPickerOpen] = useState(false);
+  const [panoramaPresetPickerOpen, setPanoramaPresetPickerOpen] = useState(false);
+  const [applyingPanoramaPreset, setApplyingPanoramaPreset] = useState<string | null>(null);
   const [mivoConnectOpen, setMivoConnectOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<SceneTabKey>("scene");
   const [sceneScaleDraft, setSceneScaleDraft] = useState(String(scene.scale));
@@ -150,6 +170,28 @@ export function ScenePanel() {
 
     addImportedAsset({ kind: "panorama", ...result });
     setPanoramaError(null);
+  }
+
+  async function applyPanoramaPreset(presetId: string) {
+    const preset = PANORAMA_PRESETS.find((item) => item.id === presetId);
+    if (!preset) return;
+
+    setApplyingPanoramaPreset(presetId);
+    setPanoramaError(null);
+    try {
+      const response = await fetch(`/panoramas/${preset.id}.jpg`);
+      if (!response.ok) throw new Error("预设全景图加载失败，请重试");
+      const panoramaFile = new File([await response.blob()], `${preset.id}.jpg`, { type: "image/jpeg" });
+      const result = await readPanoramaFile(panoramaFile);
+
+      if (panoramaAsset) removePanoramaAsset();
+      addImportedAsset({ kind: "panorama", ...result, name: preset.name });
+      setPanoramaPresetPickerOpen(false);
+    } catch (error) {
+      setPanoramaError(error instanceof Error ? error.message : "预设全景图加载失败");
+    } finally {
+      setApplyingPanoramaPreset(null);
+    }
   }
 
   function handlePanoramaCardKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -327,7 +369,19 @@ export function ScenePanel() {
                     openMivoPanoramaPicker();
                   }}
                 >
-                  从 Mivo 选择
+                  Mivo选择
+                </button>
+                <button
+                  className="panorama-source-item"
+                  role="menuitem"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setPanoramaSourceMenuOpen(false);
+                    setPanoramaPresetPickerOpen(true);
+                  }}
+                >
+                  预设选择
                 </button>
                 <button
                   className="panorama-source-item"
@@ -338,7 +392,7 @@ export function ScenePanel() {
                     openLocalPanoramaPicker();
                   }}
                 >
-                  从本地选择
+                  本地上传
                 </button>
               </div>
             ) : null}
@@ -363,13 +417,15 @@ export function ScenePanel() {
             </span>
             <span className="panorama-empty-actions">
               <button className="panorama-empty-link" type="button" onClick={openMivoPanoramaPicker}>
-                从 Mivo 选择
+                Mivo选择
               </button>
-              <span aria-hidden="true" className="panorama-empty-sep">
-                /
-              </span>
+              <span aria-hidden="true" className="panorama-empty-sep">/</span>
+              <button className="panorama-empty-link" type="button" onClick={() => setPanoramaPresetPickerOpen(true)}>
+                预设选择
+              </button>
+              <span aria-hidden="true" className="panorama-empty-sep">/</span>
               <button className="panorama-empty-link" type="button" onClick={openLocalPanoramaPicker}>
-                从本地选择
+                本地上传
               </button>
             </span>
           </div>
@@ -558,6 +614,47 @@ export function ScenePanel() {
           </div>
         </section>
       ) : null}
+      {panoramaPresetPickerOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="mivo-dialog-backdrop" role="presentation" onClick={() => setPanoramaPresetPickerOpen(false)}>
+              <section
+                aria-label="选择预设全景图"
+                aria-modal="true"
+                className="mivo-dialog panorama-preset-dialog"
+                role="dialog"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <header className="mivo-dialog-header">
+                  <span className="mivo-dialog-title">选择预设全景图</span>
+                  <button aria-label="关闭预设全景图" className="mivo-dialog-close" type="button" onClick={() => setPanoramaPresetPickerOpen(false)}>
+                    <X aria-hidden="true" size={16} strokeWidth={2} />
+                  </button>
+                </header>
+                <div className="panorama-preset-list">
+                  {PANORAMA_PRESETS.map((preset) => (
+                    <button
+                      aria-label={`选择${preset.name}`}
+                      className="panorama-preset-card"
+                      disabled={applyingPanoramaPreset !== null}
+                      key={preset.id}
+                      type="button"
+                      onClick={() => void applyPanoramaPreset(preset.id)}
+                    >
+                      <img alt="" src={panoramaPresetPreview(preset.id)} />
+                      <span className="panorama-preset-caption">
+                        <span>{preset.name}</span>
+                        <small>{preset.author} · Poly Haven · CC0</small>
+                      </span>
+                      {applyingPanoramaPreset === preset.id ? <Loader2 aria-label="正在加载" className="mivo-spin" size={18} /> : null}
+                    </button>
+                  ))}
+                </div>
+                <p className="panorama-preset-credit">全景素材来自 Poly Haven，基于 CC0 授权，可免费用于个人及商业项目。</p>
+              </section>
+            </div>,
+            document.body
+          )
+        : null}
       <MivoConnectDialog open={mivoConnectOpen} onClose={() => setMivoConnectOpen(false)} />
       <MivoAssetPicker
         kind="image"

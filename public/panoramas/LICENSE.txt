@@ -1,0 +1,18 @@
+Panorama presets are from Poly Haven (https://polyhaven.com), licensed CC0 1.0 Universal.
+Poly Haven HDRIs are released to the public domain; attribution is appreciated but not required.
+https://polyhaven.com/license
+
+Included assets and creators:
+- Venice Sunset — Greg Zaal — https://polyhaven.com/a/venice_sunset
+- Secluded Beach — Greg Zaal — https://polyhaven.com/a/secluded_beach
+- Hochsal Forest — Adrian Kubasa — https://polyhaven.com/a/hochsal_forest
+- Hotel Room — Greg Zaal — https://polyhaven.com/a/hotel_room
+- Art Studio — Oliksiy Yakovlyev — https://polyhaven.com/a/art_studio
+- Autumn Forest 01 — Andreas Mischok — https://polyhaven.com/a/autumn_forest_01
+- Urban Street 01 — Andreas Mischok — https://polyhaven.com/a/urban_street_01
+- Snowy Forest Path 01 — Oliksiy Yakovlyev — https://polyhaven.com/a/snowy_forest_path_01
+- Modern Buildings Night — Greg Zaal — https://polyhaven.com/a/modern_buildings_night
+- Brown Photostudio 01 — Sergej Majboroda — https://polyhaven.com/a/brown_photostudio_01
+
+The `.jpg` files are 2048×1024 tonemapped equirectangular panoramas derived from Poly Haven HDRIs.
+The `thumbs/` JPEG files are resized UI thumbnails derived from those panoramas.

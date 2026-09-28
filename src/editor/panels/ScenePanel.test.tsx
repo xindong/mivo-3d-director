@@ -174,7 +174,7 @@ it("renders the disconnected panorama state as a fixed-size dark card", async ()
 
   expect(panoramaStatus).toHaveClass("panorama-empty-card");
   expect(screen.getByTestId("panorama-empty-icon")).toBeInTheDocument();
-  expect(panoramaStatus).toHaveTextContent("从 Mivo 选择");
+  expect(panoramaStatus).toHaveTextContent("Mivo选择 / 预设选择 / 本地上传");
 });
 
 it("starts the Mivo panorama flow from the empty card and keeps a local entry", async () => {
@@ -186,15 +186,26 @@ it("starts the Mivo panorama flow from the empty card and keeps a local entry", 
   const uploadInput = screen.getByLabelText("上传全景图") as HTMLInputElement;
   const clickSpy = vi.spyOn(uploadInput, "click");
 
-  // The primary action on the empty card goes straight to Mivo (connecting first when needed).
-  await user.click(screen.getByLabelText("全景图连接状态"));
+  // Mivo selection opens the connect dialog when no session exists.
+  await user.click(screen.getByRole("button", { name: "Mivo选择" }));
 
   expect(screen.getByRole("dialog", { name: "连接 Mivo" })).toBeInTheDocument();
 
   // The secondary entry still opens the local file dialog.
-  await user.click(screen.getByRole("button", { name: "从本地选择" }));
+  await user.click(screen.getByRole("button", { name: "本地上传" }));
 
   expect(clickSpy).toHaveBeenCalledTimes(1);
+});
+
+it("opens the one-column panorama preset picker from the empty state", async () => {
+  const user = userEvent.setup();
+  render(<ScenePanel />);
+
+  await user.click(screen.getByRole("button", { name: "全景" }));
+  await user.click(screen.getByRole("button", { name: "预设选择" }));
+
+  expect(screen.getByRole("dialog", { name: "选择预设全景图" })).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: /^选择/ })).toHaveLength(10);
 });
 
 it("shows a floating source menu when a connected panorama thumbnail is clicked", async () => {
@@ -207,8 +218,9 @@ it("shows a floating source menu when a connected panorama thumbnail is clicked"
   await user.click(screen.getByLabelText("全景图缩略图卡片"));
 
   expect(screen.getByRole("menu", { name: "选择全景图来源" })).toBeInTheDocument();
-  expect(screen.getByRole("menuitem", { name: "从 Mivo 选择" })).toBeInTheDocument();
-  expect(screen.getByRole("menuitem", { name: "从本地选择" })).toBeInTheDocument();
+  expect(screen.getByRole("menuitem", { name: "Mivo选择" })).toBeInTheDocument();
+  expect(screen.getByRole("menuitem", { name: "预设选择" })).toBeInTheDocument();
+  expect(screen.getByRole("menuitem", { name: "本地上传" })).toBeInTheDocument();
 });
 
 it("updates panorama radius from both slider and numeric input", async () => {
